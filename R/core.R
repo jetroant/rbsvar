@@ -77,7 +77,7 @@ init_rbsvar <- function(y,
                         lags = 1,
                         constant = TRUE,
                         type = c("svar", "var")[1],
-                        mean_cent = TRUE, 
+                        mean_cent = TRUE,
                         var_adj = FALSE,
                         shrinkage = Inf,
                         p_prior = c(log(2), 1),
@@ -92,9 +92,6 @@ init_rbsvar <- function(y,
                         trace = 1,
                         REPORT = 10,
                         verbose = TRUE) {
-
-  #TEMP
-  if(type != "svar") stop("Only type = 'svar' implemented!")
 
   start_time <- Sys.time()
   xy <- build_xy(y, lags, constant)
@@ -135,10 +132,14 @@ init_rbsvar <- function(y,
   if(is.null(init)) {
 
     # 2) B-matrix
-    B_init <- diag(sqrt(diag(sigma)))
-    if(type == "svar") b_init <- c(B_init)
-    if(type == "var") b_init <- B_init[which(!lower.tri(B_init))]
-
+    if(type == "svar") {
+      B_init <- solve(diag(sqrt(diag(sigma))))
+      b_init <- c(B_init)
+    }
+    if(type == "var") {
+      B_init <- solve(chol(B_init))
+      b_init <- B_init[which(!upper.tri(B_init))]
+    }
 
     # 3) Sgt-parameters
     SGT_param <- matrix(0, nrow = ncol(y), ncol = 3)
@@ -164,7 +165,7 @@ init_rbsvar <- function(y,
 
   #Parameters required by cpp functions
   cpp_args <- list("m" = ncol(xy$yy),
-                   "first_b" = length(pre_init) - ncol(xy$yy)^2 - 3*ncol(xy$yy),
+                   "first_b" = length(pre_init) - length(b_init) - 3*ncol(xy$yy),
                    "first_sgt" = length(pre_init) - 3*ncol(xy$yy),
                    "A_rows" = ncol(xy$xx),
                    "t" = nrow(xy$yy),

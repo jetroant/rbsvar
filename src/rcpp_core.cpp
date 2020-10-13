@@ -102,8 +102,34 @@ double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
 
   //Construct B matrix
   arma::mat B(m, m);
-  for(int i = first_b; i != first_sgt; ++i) {
-    B(i - first_b) = state(i);
+
+  //SVAR or VAR (recursive)
+  if((first_sgt - first_b) == (m * m)) {
+    for(int i = first_b; i != first_sgt; ++i) {
+      B(i - first_b) = state(i);
+    }
+  } else {
+    int row = 0;
+    int col = 1;
+    int index = 0;
+    for(int i = first_b; i != first_sgt; ++i) {
+      row = row + 1;
+      if(row > m) {
+        row = 1;
+        col = col + 1;
+      }
+      while(col > row) {
+        B(index) = 0;
+        index = index + 1;
+        row = row + 1;
+        if(row > m) {
+          row = 1;
+          col = col + 1;
+        }
+      }
+      B(index) = state(i);
+      index = index + 1;
+    }
   }
 
   //Construct SGT matrix
