@@ -60,9 +60,11 @@ init_optim <- function(pre_init_state,
 
   #If normal approximation fails, OLS covariance estimates are used for
   #autoregressive parameters
-  if(is.null(init_scale) & !is.null(ols_cov)) {
+  if(is.null(init_scale)) {
     init_scale <- diag(length(pre_init_state))*0.001
-    init_scale[1:nrow(ols_cov), 1:ncol(ols_cov)] <- ols_cov
+    if(!is.null(ols_cov)) {
+      init_scale[1:nrow(ols_cov), 1:ncol(ols_cov)] <- ols_cov
+    }
   }
 
   #Collect and return the initial parameter values and the scale matrix
