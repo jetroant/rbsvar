@@ -118,7 +118,7 @@ init_rbsvar <- function(y,
                   diag(m),
                   matrix(0, nrow = (lags-1)*m, ncol = m))
       if(constant == FALSE) A0 <- A0[-1,]
-      ols_est <- c(A0)
+      ols_est <- A0
       uu <- yy - xx %*% ols_est
       sigma <- t(uu) %*% uu / nrow(uu)
       ols_cov <- NA
@@ -214,7 +214,7 @@ est_rbsvar <- function(model,
                        parallel_chains = FALSE,
                        parallel_likelihood = FALSE,
                        max_cores = NA,
-                       progress_bar = FALSE,
+                       progress_bar = TRUE,
                        verbose = TRUE) {
 
   start_time <- Sys.time()

@@ -176,6 +176,8 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
 
   if(!std::isinf(shrinkage)) {
 
+    //Construct the prior in init, just eval here (t(df = 2)?)
+
     //Construct A matrix
     //arma::mat A(A_rows, m);
     //if(A_rows > 0) {
