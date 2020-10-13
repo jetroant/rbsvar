@@ -15,7 +15,6 @@ init_optim <- function(pre_init_state,
                        REPORT,
                        verbose) {
 
-  if(verbose == TRUE) cat("Searching for optimal initial parameters values...\n")
   obj_full <- function(state) {
     ret <- -(
       log_like(state, xy$yy, xy$xx, cpp_args$first_b, cpp_args$first_sgt, cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
@@ -28,13 +27,20 @@ init_optim <- function(pre_init_state,
 
 
   #Number of cores used is restricted if 'max_cores' is not NA
-  if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
-  opt_full <- optim(pre_init_state,
-                    obj_full,
-                    method = method,
-                    control = list(maxit = maxit, trace = trace, REPORT = REPORT),
-                    hessian = !skip_hessian)
-  if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
+  if(maxit > 0) {
+    if(verbose == TRUE) cat("Searching for optimal initial parameters values...\n")
+    if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
+    opt_full <- optim(pre_init_state,
+                      obj_full,
+                      method = method,
+                      control = list(maxit = maxit, trace = trace, REPORT = REPORT),
+                      hessian = !skip_hessian)
+    if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
+  } else {
+    if(verbose == TRUE) cat("Skipping the search for optimal initial parameters values...\n")
+    opt_full <- list("par" = pre_init_state)
+    skip_hessian <- TRUE
+  }
 
   #Approximate the scale matrix based on numerically approximated Hessian
   #and collect the results
@@ -60,11 +66,13 @@ init_optim <- function(pre_init_state,
 
   #If normal approximation fails, OLS covariance estimates are used for
   #autoregressive parameters
-  if(is.null(init_scale)) {
+  if(is.null(init_scale) & maxit > 0) {
     init_scale <- diag(length(pre_init_state))*0.001
     if(!is.null(ols_cov)) {
       init_scale[1:nrow(ols_cov), 1:ncol(ols_cov)] <- ols_cov
     }
+  } else {
+    init_scale <- matrix(0.001)
   }
 
   #Collect and return the initial parameter values and the scale matrix
@@ -123,7 +131,7 @@ init_rbsvar <- function(y,
       ols_est <- A0
       uu <- yy - xx %*% ols_est
       sigma <- t(uu) %*% uu / nrow(uu)
-      ols_cov <- NA
+      ols_cov <- NULL
     }
   } else {
     ols_cov <- NULL

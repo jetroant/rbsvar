@@ -338,10 +338,24 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   arma::mat draws(N * n + m0, init_mode.n_elem);
 
   //Initial chains/draws from multivariate normal...
+
+  Rcpp::Rcout << init_scale.size() << std::endl;
+
   if(!output_as_input) {
     for(int i = 0; i != m0; ++i) {
       arma::vec xn = arma::randn(init_mode.n_elem);
-      draws.row(i) = init_mode.t() + xn.t() * arma::chol(init_scale);
+      if(init_scale.size() > 1) {
+        draws.row(i) = init_mode.t() + xn.t() * arma::chol(init_scale);
+      } else {
+        arma::mat init_scale_root = init_mode.t();
+        for(int j = 0; j != init_mode.size(); ++j) {
+          init_scale_root(j) = sqrt(init_scale(0));
+        }
+
+        Rcpp::Rcout << "ok" << std::endl;
+
+        draws.row(i) = init_mode.t() + xn.t() % init_scale_root;
+      }
     }
 
   //...or from an existing sample
