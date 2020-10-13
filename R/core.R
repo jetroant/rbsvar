@@ -137,7 +137,7 @@ init_rbsvar <- function(y,
       b_init <- c(B_init)
     }
     if(type == "var") {
-      B_init <- solve(chol(B_init))
+      B_init <- solve(chol(sigma))
       b_init <- B_init[which(!upper.tri(B_init))]
     }
 
