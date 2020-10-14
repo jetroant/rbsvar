@@ -23,22 +23,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// sgt_bounds
-arma::vec sgt_bounds(arma::vec state, int first_sgt, int m);
-RcppExport SEXP _rbsvar_sgt_bounds(SEXP stateSEXP, SEXP first_sgtSEXP, SEXP mSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::vec >::type state(stateSEXP);
-    Rcpp::traits::input_parameter< int >::type first_sgt(first_sgtSEXP);
-    Rcpp::traits::input_parameter< int >::type m(mSEXP);
-    rcpp_result_gen = Rcpp::wrap(sgt_bounds(state, first_sgt, m));
-    return rcpp_result_gen;
-END_RCPP
-}
 // log_like
-double log_like(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj, const bool parallel_likelihood, bool bounds);
-RcppExport SEXP _rbsvar_log_like(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP parallel_likelihoodSEXP, SEXP boundsSEXP) {
+double log_like(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj, const bool parallel_likelihood);
+RcppExport SEXP _rbsvar_log_like(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP parallel_likelihoodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -53,8 +40,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type mean_cent(mean_centSEXP);
     Rcpp::traits::input_parameter< const bool >::type var_adj(var_adjSEXP);
     Rcpp::traits::input_parameter< const bool >::type parallel_likelihood(parallel_likelihoodSEXP);
-    Rcpp::traits::input_parameter< bool >::type bounds(boundsSEXP);
-    rcpp_result_gen = Rcpp::wrap(log_like(state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood, bounds));
+    rcpp_result_gen = Rcpp::wrap(log_like(state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -162,8 +148,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_log_sgt0", (DL_FUNC) &_rbsvar_log_sgt0, 7},
-    {"_rbsvar_sgt_bounds", (DL_FUNC) &_rbsvar_sgt_bounds, 3},
-    {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 12},
+    {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 11},
     {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 13},
     {"_rbsvar_draw", (DL_FUNC) &_rbsvar_draw, 23},
     {"_rbsvar_sampler", (DL_FUNC) &_rbsvar_sampler, 27},

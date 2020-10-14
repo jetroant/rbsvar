@@ -61,6 +61,7 @@ struct LikelihoodParallel : public RcppParallel::Worker {
 
 };
 
+/*
 // [[Rcpp::export]]
 arma::vec sgt_bounds(arma::vec state, int first_sgt, int m) {
 
@@ -82,17 +83,13 @@ arma::vec sgt_bounds(arma::vec state, int first_sgt, int m) {
   for(int i = first_sgt; i != state.size(); ++i) state(i) = SGT(i - first_sgt);
   return state;
 }
+*/
 
 // [[Rcpp::export]]
 double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
                 const int first_b, const int first_sgt,
                 const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj,
-                const bool parallel_likelihood, bool bounds = true) {
-
-  //Makes sure the likelihood is well defined in some extreme cases
-  if(bounds) {
-    state = sgt_bounds(state, first_sgt, m);
-  }
+                const bool parallel_likelihood) {
 
   //Construct A matrix
   arma::mat A(A_rows, m);
@@ -190,6 +187,12 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   //Construct SGT matrix
   arma:: mat SGT(m, 3);
   for(int i = first_sgt; i != state.size(); ++i) SGT(i - first_sgt) = state(i);
+
+  //Bounds on skewness parameter
+  for(int i = 0; i != m; ++i) {
+    if(SGT.row(i)(0) > 0.99) return -arma::datum::inf;
+    if(SGT.row(i)(0) < -0.99) return -arma::datum::inf;
+  }
 
   //Compute the log-prior on p and q parameters
   arma::vec log_pq_prior(m);

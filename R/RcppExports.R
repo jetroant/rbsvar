@@ -5,12 +5,8 @@ log_sgt0 <- function(x, sigma, skew, p, q, mean_cent, var_adj) {
     .Call(`_rbsvar_log_sgt0`, x, sigma, skew, p, q, mean_cent, var_adj)
 }
 
-sgt_bounds <- function(state, first_sgt, m) {
-    .Call(`_rbsvar_sgt_bounds`, state, first_sgt, m)
-}
-
-log_like <- function(state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood, bounds = TRUE) {
-    .Call(`_rbsvar_log_like`, state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood, bounds)
+log_like <- function(state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood) {
+    .Call(`_rbsvar_log_like`, state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood)
 }
 
 log_prior <- function(state, yy, xx, first_b, first_sgt, m, A_rows, t, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, shrinkage) {
