@@ -139,31 +139,29 @@ init_rbsvar <- function(y,
     xy$xx <- matrix(0)
   }
 
+  # 2) B-matrix
+  if(type == "svar") {
+    B_init <- solve(diag(sqrt(diag(sigma))))
+    b_init <- c(B_init)
+  }
+  if(type == "var") {
+    B_init <- solve(chol(sigma))
+    b_init <- B_init[which(!upper.tri(B_init))]
+  }
+
+  # 3) Sgt-parameters
+  SGT_param <- matrix(0, nrow = ncol(y), ncol = 3)
+  colnames(SGT_param) <- c("lambda", "p", "q")
+  SGT_param[,"p"] <- p_prior[1]
+  SGT_param[,"q"] <- q_prior[1]
+  sgt_init <- c(SGT_param)
+
   if(is.null(init)) {
-
-    # 2) B-matrix
-    if(type == "svar") {
-      B_init <- solve(diag(sqrt(diag(sigma))))
-      b_init <- c(B_init)
-    }
-    if(type == "var") {
-      B_init <- solve(chol(sigma))
-      b_init <- B_init[which(!upper.tri(B_init))]
-    }
-
-    # 3) Sgt-parameters
-    SGT_param <- matrix(0, nrow = ncol(y), ncol = 3)
-    colnames(SGT_param) <- c("lambda", "p", "q")
-    SGT_param[,"p"] <- p_prior[1]
-    SGT_param[,"q"] <- q_prior[1]
-    sgt_init <- c(SGT_param)
-
     if(lags > 0) {
       pre_init <- c(ols_est, b_init, sgt_init)
     } else {
       pre_init <- c(b_init, sgt_init)
     }
-
   } else {
     pre_init <- init
   }
