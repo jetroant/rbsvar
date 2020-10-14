@@ -4,11 +4,11 @@ list2conStat <- function(chain_list,
                          variable,
                          index_split = NULL,
                          n_eff = FALSE) {
-  
+
   if(is.null(nrow(chain_list[[1]]))) {
     for(i in 1:length(chain_list)) chain_list[[i]] <- matrix(chain_list[[i]], ncol = 1)
   }
-  
+
   if(is.null(index_split)) index_split <- parallel::splitIndices(nrow(chain_list[[1]]), 2)
   sub_chain_list <- list()
   for(i in 1:length(chain_list)) {
@@ -17,7 +17,7 @@ list2conStat <- function(chain_list,
   }
   ret <- rep(NA, 2)
   names(ret) <- c("R_hat", "n_eff")
-  
+
   #R_hat
   m <- length(sub_chain_list)
   n <- length(sub_chain_list[[1]])
@@ -27,7 +27,7 @@ list2conStat <- function(chain_list,
   W <- mean(sapply(sub_chain_list, var))
   var_hat <- ((n-1)/n) * W + (1/n) * B
   ret["R_hat"] <- sqrt(var_hat/W)
-  
+
   #n_eff
   if(n_eff == TRUE) {
     acf_mod <- function(x) acf(x, lag.max = (n-2), plot = FALSE)$acf[,1,1]
@@ -41,31 +41,31 @@ list2conStat <- function(chain_list,
     roo_hat <- roo_hat[1:(lag-2)]
     ret["n_eff"] <- (m*n)/(1+2*sum(roo_hat))
   }
-  
+
   ret
-} 
+}
 
 convergence <- function(output,
                         burn,
                         n_eff = FALSE,
-                        graph = TRUE, 
+                        graph = TRUE,
                         verbose = TRUE) {
-  
+
   n <- output$args$n
   N <- output$args$N
   m0 <- output$args$m0
   chains <- output$chains
   burn <- burn + 1
-  
+
   if(verbose == TRUE) cat("Computing convergence statistics...")
-  
+
   #Collect chains
   chain_list <- list()
   for(i in 1:n) {
     row_indices <- seq(from = m0 + i - n, by = n, length.out = N + 1)
     chain_list[[i]] <- chains[row_indices,][-c(1:burn),]
   }
-  
+
   #Compute R_hat and n_eff
   ret_mat <- matrix(NA, ncol = 2, nrow = ncol(chains))
   colnames(ret_mat) <- c("R_hat", "n_eff")
@@ -80,7 +80,7 @@ convergence <- function(output,
     if(verbose == TRUE) setTxtProgressBar(pb, i)
   }
   if(verbose == TRUE) close(pb)
-  
+
   if(graph == TRUE) {
     plot(ts(ret_mat[,"R_hat"]), main = "", ylab = "R_hat", xlab = "Variable")
     abline(h = 1.1, lty = 2)
@@ -91,16 +91,16 @@ convergence <- function(output,
 plot_chains <- function(output,
                         variable = "b1",
                         burn = 0,
-                        breaks = "Sturges", 
+                        breaks = "Sturges",
                         real_val = NA,
                         n_eff = FALSE) {
-  
+
   n <- output$args$n
   N <- output$args$N
   m0 <- output$args$m0
   chains <- output$chains
   burn <- burn + 1
-  
+
   #Is B_inv needed?
   if(grepl("_", variable) == TRUE) {
     variable <- strsplit(variable, "_")[[1]][1]
@@ -108,15 +108,15 @@ plot_chains <- function(output,
   } else {
     B_inv <- FALSE
   }
-  
+
   #Collect chains
   chain_list <- list()
   for(i in 1:n) {
-    
+
     #Pick one chain
     row_indices <- seq(from = m0 + i - n, by = n, length.out = N + 1)
     one_chain <- chains[row_indices,]
-    
+
     #Pick the variable
     if(B_inv == TRUE) {
       b_chain <- one_chain[,output$indices$b_indices]
@@ -128,12 +128,12 @@ plot_chains <- function(output,
       }
       colnames(b_inv_chain) <- paste0("b", 1:ncol(b_inv_chain))
       chain_list[[i]] <- b_inv_chain[,variable]
-      
+
     } else {
       chain_list[[i]] <- one_chain[,variable]
     }
   }
-  
+
   #Convergence diagnostics
   chain_list_burned <- chain_list
   for(i in 1:length(chain_list_burned)) {
@@ -142,7 +142,7 @@ plot_chains <- function(output,
   conv <- list2conStat(chain_list = chain_list_burned,
                        variable = 1,
                        n_eff = n_eff)
-  
+
   #Plot the chains
   title <- ifelse(B_inv == FALSE, variable, paste0(variable, "_inv"))
   par(mfrow = c(2,1))
@@ -161,7 +161,7 @@ plot_chains <- function(output,
     }
   }
   if(burn > 1) abline(v = burn, lty = 2, lwd = 2)
-  
+
   #Plot histogram
   if(n_eff == TRUE) title <- paste0("R_hat = ", round(conv["R_hat"], 2), " / n_eff = ", round(conv["n_eff"], 2))
   if(n_eff == FALSE) title <- paste0("R_hat = ", round(conv["R_hat"], 2))
@@ -170,8 +170,8 @@ plot_chains <- function(output,
     full_post <- c(full_post, chain_list_burned[[i]])
   }
   hist(full_post, probability = TRUE, breaks = breaks,
-       main = title, xlab = "", ylab = "Density") 
-  if(!is.na(real_val)) abline(v = real_val, lty = 2, lwd = 3) 
+       main = title, xlab = "", ylab = "Density")
+  if(!is.na(real_val)) abline(v = real_val, lty = 2, lwd = 3)
   par(mfrow = c(1,1))
 }
 
@@ -184,14 +184,14 @@ irf <- function(model,
                 shock_sizes = NULL,
                 shocks = NULL,
                 verbose = TRUE) {
-  
-  
+
+
   if(requireNamespace("expm", quietly = TRUE)) {
     #Do nothing
   } else {
     stop("Package 'expm' needed for computation of impulse response functions. \n 'expm' was not found. The package can be installed by 'install.packages('expm')'. \n")
   }
-  
+
   if(model$type != "svar") stop("model$type must be 'svar'")
   m <- ncol(model$y)
   p <- model$lags
@@ -202,17 +202,17 @@ irf <- function(model,
   if(is.null(shocks)) shocks <- 1:m
   b_indices <- (model$cpp_args$first_b + 1):model$cpp_args$first_sgt
   a_indices <- 1:model$cpp_args$first_b
-  
+
   #Compute and collect B_inv and A sample
   burn <- burn + 1
   b_inv_list <- list()
   a_list <- list()
   for(i in 1:n) {
-    
+
     #Pick one chain
     row_indices <- seq(from = m0 + i - n, by = n, length.out = output$args$N + 1)
     one_chain <- output$chains[row_indices,][-c(1:burn),]
-    
+
     #Compute B_inv
     b_chain <- one_chain[,b_indices]
     b_inv_chain <- matrix(NA, ncol = m^2, nrow = nrow(b_chain))
@@ -222,7 +222,7 @@ irf <- function(model,
       b_inv_chain[j,] <- c(solve(B))
     }
     b_inv_list[[i]] <- b_inv_chain
-    
+
     #Pick A
     a_list[[i]] <- one_chain[,a_indices]
   }
@@ -235,31 +235,31 @@ irf <- function(model,
       full_a <- rbind(full_a, a_list[[i]])
     }
   }
-  
+
   rows <- sample.int(nrow(full_a), N, replace = TRUE)
   full_a <- full_a[rows,]
   full_binv <- full_binv[rows,]
-  
+
   for(shock_index in 1:m) {
-    
+
     if(!(shock_index %in% shocks)) {
       ret[[shock_index]] <- NULL
       next
     }
-    
+
     e <- rep(0, m)
     e[shock_index] <- shock_sizes[shock_index]
     irfs <- array(NA, dim = c(m, horizon+1, nrow(full_a)))
-    
+
     if(verbose == TRUE) print(paste0("Computing impulse responses... (", which(shocks == shock_index), "/", length(shocks), ")"))
     if(verbose == TRUE) pb <- txtProgressBar(min = 0, max = nrow(full_a), style = 3)
     for(row_index in 1:nrow(full_a)) {
-      
+
       B_inv <- diag(m)
       B_inv[,] <- full_binv[row_index,]
       A <- matrix(full_a[row_index,], ncol = m)
       AA <- stackA(A)
-      
+
       for(h in 1:(horizon+1)) {
         if(h == 1) {
           zero <- B_inv %*% e
@@ -269,11 +269,11 @@ irf <- function(model,
           irfs[,h,row_index] <- (expm::`%^%`(AA, (h-1)) %*% zero_long)[1:length(zero)]
         }
       }
-      
+
       if(verbose == TRUE) setTxtProgressBar(pb, row_index)
     }
     if(verbose == TRUE) close(pb)
-    
+
     if(length(cumulate) > 0) {
       for(i in 1:length(cumulate)) {
         for(j in 1:N) {
@@ -283,7 +283,7 @@ irf <- function(model,
     }
     ret[[shock_index]] <- irfs
   }
-  
+
   ret
 }
 
@@ -295,13 +295,13 @@ irf_plot <- function(irf_obj,
                      color = "tomato",
                      leg = TRUE,
                      normalize = NULL) {
-  
+
   if(requireNamespace("fanplot", quietly = TRUE)) {
     #Do nothing
   } else {
     stop("Package 'fanplot' needed for plotting the impulse response functions. \n 'fanplot' was not found. The package can be installed by 'install.packages('fanplot')'. \n")
   }
-  
+
   m <- length(irf_obj)
   if(is.null(varnames)) varnames <- paste0("var", 1:m)
   if(is.null(mfrow)) mfrow <- c(m, m)
@@ -311,20 +311,20 @@ irf_plot <- function(irf_obj,
   row <- 0
   col <- 0
   for(fig_index in 1:m^2) {
-    
+
     if((fig_index-1) %% m == 0) {
       row <- row + 1
       col <- 1
     } else {
       col <- col + 1
     }
-    
+
     if(is.null(irf_obj[[row]])) next
-    
+
     sub_irfs <- t(irf_obj[[row]][col,,])
     if(!is.null(normalize)) sub_irfs <- sub_irfs * normalize[col]
     mean_sub_irfs <- ts(apply(sub_irfs, 2, mean), start = 0)
-    
+
     if(is.null(probs)) {
       p <- c(0.0249, 0.025, seq(0.1, 0.9, 0.1), 0.975, 0.9751)
     } else {
@@ -332,7 +332,7 @@ irf_plot <- function(irf_obj,
     }
     quant <- function(column) quantile(column, probs = p)
     quantiles_sub_irfs <- apply(sub_irfs, 2, quant)
-    
+
     plot(mean_sub_irfs, lwd = 2, lty = 2, col = color, ylab = "", xlab = "",
          main = paste0("Shock ", row, " on ", varnames[col]),
          ylim = c(min(quantiles_sub_irfs), max(quantiles_sub_irfs)))
@@ -341,7 +341,7 @@ irf_plot <- function(irf_obj,
                  start = 0, fan.col = colorRampPalette(c(color, "white")),
                  rlab = NULL, ln = NULL)
     abline(h = 0, lwd = 2, lty = 2)
-    
+
     post_mass <- (max(p[-length(p)]) - min(p[-1]))*100
     if(col == 1 & row == 1 & leg == TRUE) legend("topright", c(paste0(post_mass,"% of post. prob. mass")), lwd = 0, bty = "n", col = "tomato")
   }
@@ -354,13 +354,13 @@ shock_decomp <- function(model,
                          burn = 0,
                          N = 1000,
                          verbose = TRUE) {
-  
+
   if(model$type != "svar") stop("model$type must be 'svar'")
   m <- ncol(model$y)
   p <- model$lags
   yy <- model$xy$yy
   xx <- model$xy$xx
-  n <- output$args$n 
+  n <- output$args$n
   m0 <- output$args$m0
   chains <- output$chains
   ret_E <- array(NA, dim = c(N, nrow(yy), m))
@@ -368,20 +368,20 @@ shock_decomp <- function(model,
   for(i in 1:m) ret_U[[i]] <- array(NA, dim = c(N, nrow(yy), m))
   b_indices <- (model$cpp_args$first_b + 1):model$cpp_args$first_sgt
   a_indices <- 1:model$cpp_args$first_b
-  
+
   #Collect A and B sample
   burn <- burn + 1
   b_list <- list()
   a_list <- list()
   for(i in 1:n) {
-    
+
     #Pick one chain
     row_indices <- seq(from = m0 + i - n, by = n, length.out = output$args$N + 1)
     one_chain <- chains[row_indices,][-c(1:burn),]
-    
+
     #Pick A
     a_list[[i]] <- one_chain[,a_indices]
-    
+
     #Pick B
     b_list[[i]] <- one_chain[,b_indices]
   }
@@ -394,7 +394,7 @@ shock_decomp <- function(model,
       full_a <- rbind(full_a, a_list[[i]])
     }
   }
-  
+
   #Sample N draws and compute B_inv
   rows <- sample.int(nrow(full_a), N, replace = TRUE)
   full_a <- full_a[rows,]
@@ -405,11 +405,11 @@ shock_decomp <- function(model,
     B[,] <- full_b[j,]
     full_binv[j,] <- c(solve(B))
   }
-  
+
   if(verbose == TRUE) print(paste0("Computing shock decompositions..."))
   if(verbose == TRUE) pb <- txtProgressBar(min = 0, max = N, style = 3)
   for(i in 1:N) {
-    
+
     B <- diag(m)
     B_inv <- diag(m)
     B[,] <- full_b[i,]
@@ -424,9 +424,10 @@ shock_decomp <- function(model,
     if(verbose == TRUE) setTxtProgressBar(pb, i)
   }
   if(verbose == TRUE) close(pb)
-  
+
   ret <- list("E" = ret_E,
-              "U" = ret_U)
+              "U" = ret_U,
+              "par" = list("a" = full_a, "b" = full_b, "b_inv" = full_binv))
   ret
 }
 
@@ -434,22 +435,22 @@ shock_decomp_pick <- function(decomp_obj,
                               show_date,
                               start_date,
                               freq) {
-  
+
   row_indices <- ts(1:dim(decomp_obj$E)[2],
                     start = start_date,
                     frequency = freq)
   row_index <- window(row_indices,
                       start = show_date,
                       end = show_date)
-  
+
   E <- decomp_obj$E[,row_index,]
-  
+
   m <- dim(decomp_obj$U[[1]])[3]
   U <- list()
   for(i in 1:m) {
     U[[i]] <- decomp_obj$U[[i]][, row_index, ]
   }
-  
+
   ret <- list("E" = E,
               "U" = U)
   ret
@@ -461,7 +462,7 @@ narrative_check <- function(decomp_picked,
                             total = TRUE,
                             retvec = FALSE,
                             verbose = TRUE) {
-  
+
   if(!is.null(names(decomp_picked))) {
     N <- dim(decomp_picked$U[[variable]])[1]
     agree <- rep(NA, N)
@@ -471,12 +472,12 @@ narrative_check <- function(decomp_picked,
       if(total == TRUE) agree[i] <- ifelse(own_contribution > sum(other_contributions), TRUE, FALSE)
       if(total == FALSE) agree[i] <- ifelse(own_contribution > max(other_contributions), TRUE, FALSE)
     }
-    
+
     if(verbose == TRUE) cat(round(mean(agree)*100, 2),
                             "% of the posterior sample agrees with the restriction. \n")
     if(retvec == TRUE) return(agree)
     if(retvec == FALSE) return(mean(agree))
-    
+
   } else {
     M <- length(decomp_picked)
     N <- dim(decomp_picked[[1]]$U[[variable]])[1]
