@@ -185,7 +185,6 @@ irf <- function(model,
                 shocks = NULL,
                 verbose = TRUE) {
 
-
   if(requireNamespace("expm", quietly = TRUE)) {
     #Do nothing
   } else {
@@ -348,7 +347,6 @@ irf_plot <- function(irf_obj,
   par(mfrow = c(1,1))
 }
 
-
 shock_decomp <- function(model,
                          output,
                          burn = 0,
@@ -498,7 +496,47 @@ narrative_check <- function(decomp_picked,
   }
 }
 
+narrative_sign_probs <- function(decomp_obj,
+                                 start_date,
+                                 freq,
+                                 dates,
+                                 signs) {
 
+  N <- dim(decomp_obj$E)[1]
+  m <- dim(decomp_obj$E)[3]
+  probs <- matrix(NA, nrow = length(dates), ncol = m)
+  total_probs <- rep(NA, m)
+  for(i in 1:m) {
+    for(j in 1:length(dates)) {
+      picked <- shock_decomp_pick(decomp_obj, show_date = dates[[j]], start_date = start_date, freq = freq)
+      if(signs[j] == 1) agree_dummy <- picked$E[,i] > 0
+      if(signs[j] == -1) agree_dummy <- picked$E[,i] < 0
+      if(j == 1) {
+        agree_dummies <- agree_dummy
+      } else {
+        agree_dummies <- cbind(agree_dummies, agree_dummy)
+      }
+    }
+    probs[,i] <- apply(agree_dummies, 2, mean)
+    total_probs[i] <- mean(apply(agree_dummies, 1, function(x) ifelse(sum(x) == length(x), TRUE, FALSE)))
+  }
+  ret <- rbind(probs, total_probs)
+  rownames(ret) <- c(1:length(dates), "Total")
+  ret
+}
+
+forecast_rbsvar <- function(model,
+                            output,
+                            burn = 0,
+                            horizon = 1,
+                            N = 1000,
+                            cumulate = c(),
+                            plots = TRUE,
+                            verbose = TRUE) {
+
+ # Later...
+
+}
 
 
 

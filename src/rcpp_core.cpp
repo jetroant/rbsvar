@@ -37,6 +37,63 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
   return ret;
 }
 
+// The slower but more general multinormal implementation below is a modification of: https://gallery.rcpp.org/articles/dmvnorm_arma/
+static double const log2pi = std::log(2.0 * M_PI);
+
+/* C++ version of the dtrmv BLAS function */
+void inplace_tri_mat_mult(arma::rowvec &x, arma::mat const &trimat){
+  arma::uword const n = trimat.n_cols;
+
+  for(unsigned j = n; j-- > 0;){
+    double tmp(0.);
+    for(unsigned i = 0; i <= j; ++i)
+      tmp += trimat.at(i, j) * x[i];
+    x[j] = tmp;
+  }
+}
+
+// [[Rcpp::export]]
+double dmvnrm_arma(arma::vec const &x,
+                   arma::vec const &mean,
+                   arma::mat const &sigma,
+                   bool const logd = true) {
+
+  arma::uword const xdim = x.size();
+  arma::mat const rooti = arma::inv(trimatu(arma::chol(sigma)));
+  double const rootisum = arma::sum(log(rooti.diag())),
+    constants = -(double)xdim/2.0 * log2pi,
+    other_terms = rootisum + constants;
+
+  arma::rowvec z;
+  z = (x - mean).t();
+  inplace_tri_mat_mult(z, rooti);
+  double out = other_terms - 0.5 * arma::dot(z, z);
+
+  if(logd) {
+    return out;
+  }
+  return exp(out);
+}
+
+// [[Rcpp::export]]
+double dmvnrm_arma_diagonal(arma::vec const &x,
+                            arma::vec const &mean,
+                            arma::mat const &sds,
+                            bool const logd = true) {
+
+  arma::vec log_dens(x.size());
+  for(int i = 0; i != x.size(); i++) {
+    log_dens(i) = arma::log_normpdf(x(i), mean(i), sds(i));
+  }
+
+  double out = accu(log_dens);
+  if(logd) {
+    return out;
+  }
+  return exp(out);
+}
+// Multinormal implementation ends.
+
 struct LikelihoodParallel : public RcppParallel::Worker {
 
   //Output
@@ -61,35 +118,58 @@ struct LikelihoodParallel : public RcppParallel::Worker {
 
 };
 
-/*
 // [[Rcpp::export]]
-arma::vec sgt_bounds(arma::vec state, int first_sgt, int m) {
+arma::mat fill_xx(arma::mat xx, arma::mat yy, const int m, const int t) {
 
-  //Construct SGT matrix
-  arma:: mat SGT(m, 3);
-  for(int i = first_sgt; i != state.size(); ++i) SGT(i - first_sgt) = state(i);
+  bool constant = true;
+  if(xx.n_cols % m == 0) constant = false;
+  int lags = xx.n_cols / m;
 
-  //Check bounds
-  for(int i = 0; i != m; ++i) {
-    if(SGT.row(i)(0) > 0.99) SGT.row(i)(0) = 0.99;
-    if(SGT.row(i)(0) < -0.99) SGT.row(i)(0) = -0.99;
-    if(SGT.row(i)(1) > 10) SGT.row(i)(1) = 10;
-    if(SGT.row(i)(1) < -2.3) SGT.row(i)(1) = -2.3;
-    if(SGT.row(i)(2) > 10) SGT.row(i)(2) = 10;
-    if(SGT.row(i)(2) < -2.3) SGT.row(i)(2) = -2.3;
+  bool carry_on = true;
+  int count = 0;
+  while(carry_on) {
+    count = count + 1;
+    int row = t - count;
+    for(int i = 0; i != lags; ++i) {
+      if(row + i + 1 == t) break;
+      for(int j = 0; j != m; ++j) {
+        xx.row(row + i + 1)(constant + m*i + j) = yy.row(row)(j);
+      }
+    }
+    carry_on = xx.row(row).has_nan();
   }
-
-  //Return the bounded values
-  for(int i = first_sgt; i != state.size(); ++i) state(i) = SGT(i - first_sgt);
-  return state;
+  return(xx);
 }
-*/
 
 // [[Rcpp::export]]
-double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
-                const int first_b, const int first_sgt,
-                const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj,
-                const bool parallel_likelihood) {
+Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
+                     int t, int m) {
+  arma::mat V_diags(t, m);
+  arma::mat E(t, m, arma::fill::zeros);
+  arma::mat VE = (yy - fit) * B.t();
+  E.row(0) = VE.row(0);
+  arma::vec v_last(m, arma::fill::zeros);
+  V_diags.row(0) = arma::exp(v_last).t();
+  arma::vec r_exp = arma::exp(GARCH.col(2));
+  for(int i = 1; i != VE.n_rows; i++) {
+    arma::vec last_abse = arma::abs(E.row(i-1)).t();
+    for(int j = 0; j != m; j++) {
+      v_last(j) = GARCH(j,0) * v_last(j) + GARCH(j,1) * pow(last_abse(j), r_exp(j));
+    }
+    V_diags.row(i) = arma::exp(v_last).t();
+    E.row(i) = VE.row(i) / arma::exp(v_last.t());
+  }
+  Rcpp::List out;
+  out["E"] = E;
+  out["V_diags"] = V_diags;
+  return out;
+}
+
+// [[Rcpp::export]]
+double log_like(arma::vec state, arma::mat yy, arma::mat xx,
+                const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+                const int m, const int A_rows, const int t, const arma::vec yna_indices,
+                const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
 
   //Construct A matrix
   arma::mat A(A_rows, m);
@@ -100,6 +180,7 @@ double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
   //Construct B matrix
   arma::mat B(m, m);
 
+  //Modify this if first_garch != -1, i.e. unit diagonal in B (2/4)
   //SVAR or VAR (recursive)
   if((first_sgt - first_b) == (m * m)) {
     for(int i = first_b; i != first_sgt; ++i) {
@@ -131,14 +212,50 @@ double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
 
   //Construct SGT matrix
   arma:: mat SGT(m, 3);
-  for(int i = first_sgt; i != state.size(); ++i) SGT(i - first_sgt) = state(i);
+  for(int i = first_sgt; i != first_sgt + m * 3; ++i) SGT(i - first_sgt) = state(i);
+
+  //Construct GARCH matrix
+  arma:: mat GARCH(m, 3);
+  if(first_garch != first_yna) {
+    for(int i = first_garch; i != first_garch + m * 3; ++i) GARCH(i - first_garch) = state(i);
+  }
+
+  //Rebuild yy and xx if there are missing values in the data
+  if(yna_indices(0) != -1) {
+    for(int i = 0; i != yna_indices.size(); ++i) {
+      yy(yna_indices(i) - 1) = state(first_yna + i);
+    }
+    xx = fill_xx(xx, yy, m, t);
+  }
 
   //Recover structural shocks
   arma::mat fit(t, m, arma::fill::zeros);
   if(A_rows > 0) {
     fit = xx * A;
   }
-  const arma::mat E = (yy - fit) * B.t();
+  arma::mat E(t, m, arma::fill::zeros);
+
+  // (garch == true)
+  arma::mat V_diags(t, m);
+  if(first_garch != first_yna) {
+    arma::mat VE = (yy - fit) * B.t();
+    E.row(0) = VE.row(0);
+    arma::vec v_last(m, arma::fill::zeros);
+    V_diags.row(0) = arma::exp(v_last).t();
+    arma::vec r_exp = arma::exp(GARCH.col(2));
+    for(int i = 1; i != VE.n_rows; i++) {
+      arma::vec last_abse = arma::abs(E.row(i-1)).t();
+      for(int j = 0; j != m; j++) {
+        v_last(j) = GARCH(j,0) * v_last(j) + GARCH(j,1) * pow(last_abse(j), r_exp(j));
+      }
+      V_diags.row(i) = arma::exp(v_last).t();
+      E.row(i) = VE.row(i) / arma::exp(v_last.t());
+    }
+
+  // (garch == false)
+  } else {
+    E = (yy - fit) * B.t();
+  }
 
   //Compute the log-likelihood
   arma::mat log_likes(t, m);
@@ -157,36 +274,113 @@ double log_like(arma::vec state, const arma::mat yy, const arma::mat xx,
     parallelFor(0, log_likes.size(), Wrkr);
   }
 
-  //Return the log-likelihood
-  double ret = t * log(abs(arma::det(B))) + accu(log_likes);
-  if(std::isnan(ret)) ret = -arma::datum::inf;
+  //The log-likelihood to be returned
+  double ret;
+  // (garch == true)
+  if(first_garch != first_yna) {
+    arma::vec BV_inv_dets(t);
+    for(int i = 0; i != t; i++) {
+      arma::mat V = arma::diagmat(V_diags.row(i).t());
+
+      //With extremely bad parameter values the diagonal of V underflows
+      //(e.g. some numerical optimization algorithms might cause such behavior)
+      for(int j = 0; j != m; j++) {
+        if(V(j,j) == 0) return -arma::datum::inf;
+      }
+      arma::mat BV = arma::inv( arma::diagmat(V) ) * B;
+      BV_inv_dets(i) = log(abs(arma::det(BV)));
+    }
+    ret = accu(BV_inv_dets) + accu(log_likes);
+
+  // (garch == false)
+  } else {
+    ret = t * log(abs(arma::det(B))) + accu(log_likes);
+  }
+  if(std::isnan(ret)) return -arma::datum::inf;
   return ret;
 }
 
 // [[Rcpp::export]]
 double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
-                 const int first_b, const int first_sgt,
+                 const int first_b, const int first_sgt, const int first_garch, const int first_yna,
                  const int m, const int A_rows, const int t,
+                 const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
+                 const arma::vec b_mean, const arma::mat b_cov,
                  const double p_prior_mode, const double p_prior_scale,
-                 const double q_prior_mode, const double q_prior_scale,
-                 const double shrinkage) {
+                 const double q_prior_mode, const double q_prior_scale) {
 
-  if(!std::isinf(shrinkage)) {
-
-    //Construct the prior in init, just eval here (t(df = 2)?)
+  //Prior on A (e.g. Minnesota prior)
+  double log_a_prior = 0;
+  if(a_cov(0) != -1) {
 
     //Construct A matrix
-    //arma::mat A(A_rows, m);
-    //if(A_rows > 0) {
-    //  for(int i = 0; i != first_b; ++i) A(i) = state(i);
-    //}
+    arma::mat A(A_rows, m);
+    if(A_rows > 0) {
+      for(int i = 0; i != first_b; ++i) A(i) = state(i);
+    }
 
-    //Impose Minnesota prior...
+    //Evaluate log prior density at A
+    if(prior_A_diagonal == true) {
+      log_a_prior = dmvnrm_arma_diagonal(arma::vectorise(A), a_mean, a_cov, prior_A_diagonal);
+    } else {
+      log_a_prior = dmvnrm_arma(arma::vectorise(A), a_mean, a_cov, prior_A_diagonal);
+    }
+  }
+
+  //Prior on B
+  double log_b_prior = 0;
+  if(b_cov(0) != -1) {
+
+    //Construct B matrix
+    arma::mat B(m, m);
+
+    //SVAR or VAR (recursive)
+    if((first_sgt - first_b) == (m * m)) {
+      for(int i = first_b; i != first_sgt; ++i) {
+        B(i - first_b) = state(i);
+      }
+    } else {
+      int row = 0;
+      int col = 1;
+      int index = 0;
+      for(int i = first_b; i != first_sgt; ++i) {
+        row = row + 1;
+        if(row > m) {
+          row = 1;
+          col = col + 1;
+        }
+        while(col > row) {
+          B(index) = 0;
+          index = index + 1;
+          row = row + 1;
+          if(row > m) {
+            row = 1;
+            col = col + 1;
+          }
+        }
+        B(index) = state(i);
+        index = index + 1;
+      }
+    }
+
+    //Evaluate log prior density at B
+    log_b_prior = dmvnrm_arma(arma::vectorise(B), b_mean, b_cov);
   }
 
   //Construct SGT matrix
   arma:: mat SGT(m, 3);
-  for(int i = first_sgt; i != state.size(); ++i) SGT(i - first_sgt) = state(i);
+  for(int i = first_sgt; i != first_sgt + m * 3; ++i) SGT(i - first_sgt) = state(i);
+
+  //Construct GARCH matrix and check feasibility of gammas and r
+  arma:: mat GARCH(m, 3);
+  if(first_garch != first_yna) {
+    for(int i = first_garch; i != first_garch + m * 3; ++i) GARCH(i - first_garch) = state(i);
+    for(int i = 0; i != m; ++i) {
+      if(GARCH.row(i)(0) < 0) return -arma::datum::inf;
+      if(GARCH.row(i)(1) < 0) return -arma::datum::inf;
+      if(GARCH.row(i)(2) > SGT.row(i)(1) + SGT.row(i)(2)) return -arma::datum::inf;
+    }
+  }
 
   //Bounds on skewness parameter
   for(int i = 0; i != m; ++i) {
@@ -204,7 +398,7 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   }
 
   //Return the log-prior
-  double ret = accu(log_pq_prior);
+  double ret = accu(log_pq_prior) + log_a_prior + log_b_prior;
   if(std::isnan(ret)) ret = -arma::datum::inf;
   return ret;
 }
@@ -213,11 +407,13 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
 void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_row, int last_row,
           const double gamma, const int K, const int n,
           const arma::mat& yy, const arma::mat& xx,
-          const int first_b, const int first_sgt,
-          const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj,
+          const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+          const int m, const int A_rows, const int t, const arma::vec yna_indices,
+          const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
+          const arma::vec b_mean, const arma::mat b_cov,
           const double p_prior_mode, const double p_prior_scale,
           const double q_prior_mode, const double q_prior_scale,
-          const double shrinkage, const bool parallel_likelihood) {
+          const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
 
   //Initialize the state with current state of the chain
   arma::vec state = vectorise(draws.row(state_row));
@@ -247,13 +443,15 @@ void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_ro
 
     //Compute proposal density
     proposal_density =
-      log_like(proposal, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood) +
-      log_prior(proposal, yy, xx, first_b, first_sgt, m, A_rows, t,
-                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale,
-                shrinkage);
-
-    //Rcpp::Rcout << "last den: "<< last_density << std::endl;
-    //Rcpp::Rcout << "den: "<< proposal_density << std::endl;
+      log_like(proposal, yy, xx,
+               first_b, first_sgt, first_garch, first_yna,
+               m, A_rows, t, yna_indices,
+               mean_cent, var_adj, parallel_likelihood) +
+      log_prior(proposal, yy, xx,
+                first_b, first_sgt, first_garch, first_yna,
+                m, A_rows, t,
+                a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale);
 
     //Accept or reject proposal
     double log_ratio = proposal_density - last_density;
@@ -291,19 +489,35 @@ struct DrawParallel : public RcppParallel::Worker {
   const arma::mat& xx;
   const int first_b;
   const int first_sgt;
+  const int first_garch;
+  const int first_yna;
   const bool mean_cent;
   const bool var_adj;
+  const arma::vec a_mean;
+  const arma::mat a_cov;
+  const bool prior_A_diagonal;
+  const arma::vec b_mean;
+  const arma::mat b_cov;
+  const arma::vec yna_indices;
   const RcppParallel::RVector<double> par_vec;
 
-  DrawParallel(arma::mat& draws, arma::vec& densities, arma::vec& asums,
-               const arma::mat& yy, const arma::mat& xx, const int first_b, const int first_sgt, Rcpp::NumericVector par_vec, const bool mean_cent, const bool var_adj)
-    : draws(draws), densities(densities), asums(asums), yy(yy), xx(xx), first_b(first_b), first_sgt(first_sgt), par_vec(par_vec), mean_cent(mean_cent), var_adj(var_adj) {}
+  DrawParallel(arma::mat& draws, arma::vec& densities, arma::vec& asums, const arma::mat& yy, const arma::mat& xx,
+               const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+               const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov,
+               Rcpp::NumericVector par_vec, const arma::vec yna_indices, const bool mean_cent, const bool var_adj)
+    : draws(draws), densities(densities), asums(asums), yy(yy), xx(xx),
+      first_b(first_b), first_sgt(first_sgt), first_garch(first_garch), first_yna(first_yna),
+      a_mean(a_mean), a_cov(a_cov), prior_A_diagonal(prior_A_diagonal), b_mean(b_mean), b_cov(b_cov),
+      par_vec(par_vec), yna_indices(yna_indices), mean_cent(mean_cent), var_adj(var_adj) {}
 
   void operator()(std::size_t begin, std::size_t end) {
     for(int j = begin; j != end; ++j) {
       draw(draws, densities, asums, j, j - par_vec[1],
-           par_vec[4], par_vec[3], par_vec[1], yy, xx, first_b, first_sgt, par_vec[5], par_vec[6], par_vec[7], mean_cent, var_adj,
-           par_vec[8], par_vec[9], par_vec[10], par_vec[11], par_vec[12], par_vec[13]);
+           par_vec[4], par_vec[3], par_vec[1], yy, xx,
+           first_b, first_sgt, first_garch, first_yna,
+           par_vec[5], par_vec[6], par_vec[7], yna_indices,
+           a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+           par_vec[8], par_vec[9], par_vec[10], par_vec[11], mean_cent, var_adj, par_vec[12]);
     }
   }
 };
@@ -314,14 +528,17 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
                    const bool output_as_input, const arma::mat old_chain, const bool new_chain,
                    const bool parallel, const bool parallel_likelihood,
                    const arma::mat yy, const arma::mat xx,
-                   const int m, const int A_rows, const int t, const bool mean_cent, const bool var_adj,
-                   const int first_b, const int first_sgt,
+                   const int m, const int A_rows, const int t, const arma::vec yna_indices,
+                   const bool mean_cent, const bool var_adj,
+                   const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+                   const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
+                   const arma::vec b_mean, const arma::mat b_cov,
                    const double p_prior_mode, const double p_prior_scale,
                    const double q_prior_mode, const double q_prior_scale,
-                   const double shrinkage, const bool progress_bar) {
+                   const bool progress_bar) {
 
   //Collect parameters
-  Rcpp::NumericVector par_vec(13);
+  Rcpp::NumericVector par_vec(12);
   par_vec[0] = N;
   par_vec[1] = n;
   par_vec[2] = m0;
@@ -334,8 +551,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   par_vec[9] = p_prior_scale;
   par_vec[10] = q_prior_mode;
   par_vec[11] = q_prior_scale;
-  par_vec[12] = shrinkage;
-  par_vec[13] = parallel_likelihood;
+  par_vec[12] = parallel_likelihood;
 
   //Initialize the chains
   arma::mat draws(N * n + m0, init_mode.n_elem);
@@ -384,10 +600,15 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   for(int j = 0; j != n; ++j) {
     arma::vec state = vectorise(draws.row(last_row - j));
     double density =
-      log_like(state, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj, parallel_likelihood) +
-      log_prior(state, yy, xx, first_b, first_sgt, m, A_rows, t,
-                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale,
-                shrinkage);
+      log_like(state, yy, xx,
+               first_b, first_sgt, first_garch, first_yna,
+               m, A_rows, t, yna_indices,
+               mean_cent, var_adj, parallel_likelihood) +
+      log_prior(state, yy, xx,
+                first_b, first_sgt, first_garch, first_yna,
+                m, A_rows, t,
+                a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale);
     densities(last_row - j) = density;
   }
 
@@ -426,9 +647,12 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
       for(int j = 0; j != n; ++j) {
         int state_row = last_row - j;
         draw(draws, densities, asums, state_row, last_row,
-             gamma, K, n, yy, xx, first_b, first_sgt, m, A_rows, t, mean_cent, var_adj,
+             gamma, K, n, yy, xx,
+             first_b, first_sgt, first_garch, first_yna,
+             m, A_rows, t, yna_indices,
+             a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
              p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale,
-             shrinkage, parallel_likelihood);
+             mean_cent, var_adj, parallel_likelihood);
       }
       last_row = last_row + n;
     }
@@ -437,7 +661,9 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   //Parallel
   if(parallel == true) {
     DrawParallel Wrkr(draws, densities, asums,
-                      yy, xx, first_b, first_sgt, par_vec, mean_cent, var_adj);
+                      yy, xx, first_b, first_sgt, first_garch, first_yna,
+                      a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                      par_vec, yna_indices, mean_cent, var_adj);
     for(int i = 0; i != N; ++i) {
 
       //If an existing sample is continued we skip iterations already carried
@@ -477,26 +703,6 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   return ret_list;
 }
 
-// [[Rcpp::export]]
-void test() {
-  float progress = 0.0;
-  while (progress < 1.0) {
-    int barWidth = 70;
-
-    Rcpp::Rcout << "[";
-    int pos = barWidth * progress;
-    for (int i = 0; i < barWidth; ++i) {
-      if (i < pos) Rcpp::Rcout << "=";
-      else if (i == pos) Rcpp::Rcout << ">";
-      else Rcpp::Rcout << " ";
-    }
-    Rcpp::Rcout << "] " << int(progress * 100.0) << " %\r";
-    Rcpp::Rcout.flush();
-
-    progress += 0.16; // for demonstration only
-  }
-  Rcpp::Rcout << std::endl;
-}
 
 
 
