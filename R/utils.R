@@ -27,7 +27,7 @@ build_xy <- function(y, p, constant = TRUE) {
 #Builds xx and yy dummy prior parts from y and p (lags) NO EXPORT
 build_xy0 <- function(y, p, shrinkage, minnesota_means, constant = TRUE) {
   n <- ncol(y)
-  if(is.null(minnesota_means)) minnesota_means <- rep(0, n)
+  if(is.null(minnesota_means)) minnesota_means <- rep(1, n)
   if(length(minnesota_means) == 1) minnesota_means <- rep(minnesota_means, n)
   if(length(minnesota_means) != n) stop("'minnesota_means' not of length 'ncol(y)'.")
   arsigmas <- rep(NA, n)

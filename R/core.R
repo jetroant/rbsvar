@@ -25,7 +25,7 @@ init_optim <- function(pre_init,
                   cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
                   cpp_args$m, cpp_args$A_rows, cpp_args$t,
                   prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                  prior$p[1], prior$p[2], prior$q[1], prior$q[2])
+                  prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
     )
     if(ret == Inf) ret <- -min_density
     ret
@@ -98,6 +98,7 @@ init_rbsvar <- function(y,
                         var_adj = FALSE,
                         p_prior = c(log(2), 1),
                         q_prior = c(log(1), 2),
+                        r_prior = c(log(1), 1),
                         shrinkage = Inf,
                         minnesota_means = NULL,
                         prior = list(),
@@ -146,6 +147,7 @@ init_rbsvar <- function(y,
   ### Prior ###
   prior$p <- p_prior
   prior$q <- q_prior
+  prior$r <- r_prior
   if(is.null(prior$B)) prior$B <- list("mean" = matrix(-1), "cov" = matrix(-1))
   if(is.null(prior$A)) prior$A <- list("mean" = matrix(-1), "cov" = matrix(-1))
 
@@ -378,6 +380,7 @@ est_rbsvar <- function(model,
                          b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
                          p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
                          q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                         r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
                          progress_bar = progress_bar)
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
 
@@ -448,7 +451,7 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
                 cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
                 cpp_args$m, cpp_args$A_rows, cpp_args$t,
                 prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                prior$p[1], prior$p[2], prior$q[1], prior$q[2])
+                prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
   )
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
   ret

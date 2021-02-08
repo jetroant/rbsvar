@@ -307,7 +307,8 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
                  const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
                  const arma::vec b_mean, const arma::mat b_cov,
                  const double p_prior_mode, const double p_prior_scale,
-                 const double q_prior_mode, const double q_prior_scale) {
+                 const double q_prior_mode, const double q_prior_scale,
+                 const double r_prior_mode, const double r_prior_scale) {
 
   //Prior on A (e.g. Minnesota prior)
   double log_a_prior = 0;
@@ -397,8 +398,17 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
       arma::log_normpdf(sgt_param(2), q_prior_mode, q_prior_scale);
   }
 
+  //Compute the log-prior on r parameters
+  arma::vec log_r_prior(m, arma::fill::zeros);
+  if(first_garch != first_yna) {
+    for(int i = 0; i != m; ++i) {
+      arma::vec garch_param = vectorise(GARCH.row(i));
+      log_r_prior(i) = arma::log_normpdf(garch_param(2), r_prior_mode, r_prior_scale);
+    }
+  }
+
   //Return the log-prior
-  double ret = accu(log_pq_prior) + log_a_prior + log_b_prior;
+  double ret = accu(log_pq_prior) + accu(log_r_prior) + log_a_prior + log_b_prior;
   if(std::isnan(ret)) ret = -arma::datum::inf;
   return ret;
 }
@@ -413,6 +423,7 @@ void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_ro
           const arma::vec b_mean, const arma::mat b_cov,
           const double p_prior_mode, const double p_prior_scale,
           const double q_prior_mode, const double q_prior_scale,
+          const double r_prior_mode, const double r_prior_scale,
           const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
 
   //Initialize the state with current state of the chain
@@ -451,7 +462,9 @@ void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_ro
                 first_b, first_sgt, first_garch, first_yna,
                 m, A_rows, t,
                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale);
+                p_prior_mode, p_prior_scale,
+                q_prior_mode, q_prior_scale,
+                r_prior_mode, r_prior_scale);
 
     //Accept or reject proposal
     double log_ratio = proposal_density - last_density;
@@ -517,7 +530,8 @@ struct DrawParallel : public RcppParallel::Worker {
            first_b, first_sgt, first_garch, first_yna,
            par_vec[5], par_vec[6], par_vec[7], yna_indices,
            a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-           par_vec[8], par_vec[9], par_vec[10], par_vec[11], mean_cent, var_adj, par_vec[12]);
+           par_vec[8], par_vec[9], par_vec[10], par_vec[11], par_vec[12], par_vec[13],
+           mean_cent, var_adj, par_vec[14]);
     }
   }
 };
@@ -535,6 +549,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
                    const arma::vec b_mean, const arma::mat b_cov,
                    const double p_prior_mode, const double p_prior_scale,
                    const double q_prior_mode, const double q_prior_scale,
+                   const double r_prior_mode, const double r_prior_scale,
                    const bool progress_bar) {
 
   //Collect parameters
@@ -551,7 +566,9 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   par_vec[9] = p_prior_scale;
   par_vec[10] = q_prior_mode;
   par_vec[11] = q_prior_scale;
-  par_vec[12] = parallel_likelihood;
+  par_vec[12] = r_prior_mode;
+  par_vec[13] = r_prior_scale;
+  par_vec[14] = parallel_likelihood;
 
   //Initialize the chains
   arma::mat draws(N * n + m0, init_mode.n_elem);
@@ -608,7 +625,9 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
                 first_b, first_sgt, first_garch, first_yna,
                 m, A_rows, t,
                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale);
+                p_prior_mode, p_prior_scale,
+                q_prior_mode, q_prior_scale,
+                r_prior_mode, r_prior_scale);
     densities(last_row - j) = density;
   }
 
@@ -651,7 +670,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
              first_b, first_sgt, first_garch, first_yna,
              m, A_rows, t, yna_indices,
              a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-             p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale,
+             p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale,
              mean_cent, var_adj, parallel_likelihood);
       }
       last_row = last_row + n;
