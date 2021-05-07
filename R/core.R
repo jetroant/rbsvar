@@ -382,7 +382,7 @@ init_rbsvar <- function(y,
                      REPORT = REPORT,
                      verbose = verbose)
 
-  if(verbose == TRUE) cat(paste0("Robust bayesian ", type, " model initialized.\n"))
+  if(verbose == TRUE) cat(paste0("DONE. Robust bayesian ", type, " model initialized.\n"))
   model <- list("y" = y,
                 "xy" = xy,
                 "lags" = lags,
@@ -441,21 +441,21 @@ est_rbsvar <- function(model,
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
 
   ### Sampler runs here
-  sampler_out <- sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
-                         init_mode = model$init$init_mode, init_scale = model$init$init_scale,
-                         output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
-                         parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
-                         yy = model$xy$yy, xx = model$xy$xx,
-                         m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                         yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
-                         mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                         first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                         a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                         b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                         p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                         q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                         r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                         progress_bar = progress_bar)
+  sampler_out <- rbsvar::sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
+                                 init_mode = model$init$init_mode, init_scale = model$init$init_scale,
+                                 output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
+                                 parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
+                                 yy = model$xy$yy, xx = model$xy$xx,
+                                 m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                                 yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
+                                 mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
+                                 first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
+                                 a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
+                                 b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
+                                 p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
+                                 q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                                 r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
+                                 progress_bar = progress_bar)
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
 
   ### Clean up the output
