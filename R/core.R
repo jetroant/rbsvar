@@ -19,7 +19,7 @@ init_optim <- function(pre_init,
     ret <- -(
       log_like(state, xy$yy, xy$xx,
                cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices,
+               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
                cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
         log_prior(state, xy$yy, xy$xx,
                   cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
@@ -30,7 +30,6 @@ init_optim <- function(pre_init,
     if(ret == Inf) ret <- -min_density
     ret
   }
-
 
   #Number of cores used is restricted if 'max_cores' is not NA
   if(maxit > 0) {
@@ -63,22 +62,45 @@ init_optim <- function(pre_init,
       }
       chol2inv(chol(opt_full$hessian))
     }, error = function(e) {
-      if(verbose == TRUE) cat("Inversion of numerical Hessian failed, initial scale and orientation might be inefficient.\n")
+      if(verbose == TRUE) cat("Inversion of numerical Hessian failed, but not to worry, initial covariance matrix will be acquired some other way. \n")
       NULL
     })
   } else {
     init_scale <- NULL
   }
 
-  #If normal approximation fails, OLS covariance estimates are used for
-  #autoregressive parameters
-  if(is.null(init_scale) & maxit > 0) {
+  if(is.null(init_scale)) {
     init_scale <- diag(length(pre_init))*0.001
+
+    # OLS covariance estimates can be used as initial covariance of autoregressive parameters
     if(!is.null(ols_cov)) {
       init_scale[1:nrow(ols_cov), 1:ncol(ols_cov)] <- ols_cov
     }
-  } else {
-    init_scale <- matrix(0.001)
+
+    # Coarse initial estimate for the covariance of the elements in B may be obtained via bootstrap
+    if(verbose == TRUE) cat("Computing coarse bootstrap estimate for the initial covariance of the elements in B. \n")
+    uu <- xy$yy - xy$xx %*% matrix(opt_full$par[1:ncol(ols_cov)], ncol = ncol(xy$yy))
+    b_boot <- matrix(NA, nrow = 1000, ncol = cpp_args$first_sgt - cpp_args$first_b)
+    for(i in 1:1000) {
+      uu_rnd <- uu[sample.int(nrow(uu), nrow(uu), replace = TRUE),]
+      sigma_rnd <- t(uu_rnd) %*% uu_rnd / nrow(uu_rnd)
+      if(type == "svar") {
+        B_init <- expm::sqrtm(sigma_rnd)
+        Binv_init <- solve(B_init)
+        if(B_inverse) b_init <- c(Binv_init) else b_init <- c(B_init)
+      }
+      if(type == "var") {
+        B_init <- t(chol(sigma_rnd))
+        Binv_init <- solve(B_init)
+        if(B_inverse) b_init <- c(Binv_init)[which(!upper.tri(B_init))] else b_init <- c(B_init)[which(!upper.tri(B_init))]
+      }
+      b_boot[i,] <- b_init
+    }
+    init_b_cov <- crossprod(scale(b_boot, scale = FALSE)) / nrow(b_boot)
+    if(min(eigen(init_b_cov)$val) < 0) diag(init_b_cov) <- diag(init_b_cov) + abs(min(eigen(init_b_cov)$val))
+    if(min(eigen(init_b_cov)$val) < 1e-6) diag(init_b_cov) <- diag(init_b_cov) + 1e-6
+    b_indices <- (cpp_args$first_b + 1):(cpp_args$first_sgt)
+    init_scale[b_indices, b_indices] <- init_b_cov
   }
 
   #Collect and return the initial parameter values and the scale matrix
@@ -99,18 +121,20 @@ init_rbsvar <- function(y,
                         p_prior = c(log(2), 1),
                         q_prior = c(log(1), 2),
                         r_prior = c(log(1), 1),
+                        B_prior = c(NA, NA),
+                        B_inverse = TRUE,
                         shrinkage = Inf,
                         minnesota_means = NULL,
                         prior = list(),
                         init = NULL,
+                        maxit = 0,
                         method = "L-BFGS-B",
                         skip_hessian = NULL,
+                        trace = 1,
+                        REPORT = 100,
                         min_density = -1000000,
                         parallel_likelihood = FALSE,
                         max_cores = NA,
-                        maxit = 500,
-                        trace = 1,
-                        REPORT = 10,
                         verbose = TRUE) {
 
   start_time <- Sys.time()
@@ -124,6 +148,7 @@ init_rbsvar <- function(y,
   }
 
   ### Missing values in data ###
+
   if(sum(is.na(yy)) != 0) {
     if(type == "svar") stop("'type = svar' only supports balanced data for now (no missing values in 'y').")
 
@@ -145,15 +170,25 @@ init_rbsvar <- function(y,
   }
 
   ### Prior ###
+
   prior$p <- p_prior
   prior$q <- q_prior
   prior$r <- r_prior
+  if(sum(is.na(B_prior)) == 0) {
+    if(type == "svar") {
+      prior$B <- list("mean" = c(diag(ncol(y)) * B_prior[1]),
+                      "cov" = diag(ncol(y)^2) * B_prior[2])
+    } else {
+      prior$B <- list("mean" = diag(ncol(y))[which(!upper.tri(diag(ncol(y))))] * B_prior[1],
+                      "cov" = diag((ncol(y) * (ncol(y) + 1)) / 2) * B_prior[2])
+    }
+  }
   if(is.null(prior$B)) prior$B <- list("mean" = matrix(-1), "cov" = matrix(-1))
   if(is.null(prior$A)) prior$A <- list("mean" = matrix(-1), "cov" = matrix(-1))
 
-  ### Pre-initial values / Prior ###
+  ### Initial values and Minnesota-prior ###
 
-  # 1) Autoregressive parameters
+  # A and Minnesota-prior
   if(!is.null(xx)) {
     if(ncol(xx) < nrow(xx) & shrinkage == Inf) {
       ols_est <- chol2inv(chol(crossprod(xx))) %*% t(xx) %*% yy
@@ -186,19 +221,22 @@ init_rbsvar <- function(y,
       }
     }
   } else {
+    ols_est <- c()
     ols_cov <- NULL
     sigma <- t(yy) %*% yy / nrow(yy)
     xy$xx <- matrix(0)
   }
 
-  # 2) B-matrix
+  # B
   if(type == "svar") {
-    B_init <- solve(diag(sqrt(diag(sigma))))
-    b_init <- c(B_init)
+    B_init <- expm::sqrtm(sigma)
+    Binv_init <- solve(B_init)
+    if(B_inverse) b_init <- c(Binv_init) else b_init <- c(B_init)
   }
   if(type == "var") {
-    B_init <- solve(t(chol(sigma)))
-    b_init <- B_init[which(!upper.tri(B_init))]
+    B_init <- t(chol(sigma))
+    Binv_init <- solve(B_init)
+    if(B_inverse) b_init <- c(Binv_init)[which(!upper.tri(B_init))] else b_init <- c(B_init)[which(!upper.tri(B_init))]
   }
 
   # 3) Sgt-parameters
@@ -206,6 +244,27 @@ init_rbsvar <- function(y,
   colnames(SGT_param) <- c("lambda", "p", "q")
   SGT_param[,"p"] <- p_prior[1]
   SGT_param[,"q"] <- q_prior[1]
+
+  if(is.null(init)) {
+    if(verbose) cat("Looking for initial sgt-parameters... \n")
+    neg_ll_sgt <- function(par, y, max_ret = 1000000) {
+      if(abs(par[3]) > 0.99) return(max_ret)
+      ret <- -sum(
+        sgt::dsgt(y, mu = 0, sigma = exp(1), lambda = par[1],
+                  p = exp(par[2]), q = exp(par[3]), mean.cent = mean_cent, var.adj = var_adj, log = T)
+      )
+      if(abs(ret) == Inf | is.nan(ret)) return(max_ret)
+      ret
+    }
+    fit_sgt <- function(y, init_sgt) {
+      optim(init_sgt, neg_ll_sgt, method = "L-BFGS-B", y = y)
+    }
+    E <- (xy$yy - xy$xx %*% matrix(ols_est, ncol = ncol(y))) %*% t(Binv_init)
+    for(i in 1:ncol(E)) {
+      try(SGT_param[i,] <- fit_sgt(E[,i], SGT_param[i,])$par,
+          silent = TRUE)
+    }
+  }
 
   # 4) Garch-parameters
   if(garch == TRUE) {
@@ -215,7 +274,15 @@ init_rbsvar <- function(y,
     GARCH_param[,"gamma_1"] <- 0.1
   }
 
-  # Check the feasibility of the initial values (p, q and r)
+  # User provided initial values
+  if(!is.null(init)) {
+    SGT_param[] <- init[(length(ols_est) + length(b_init) + 1):(length(ols_est) + length(b_init) + length(SGT_param))]
+    if(garch == TRUE) {
+      GARCH_param[] <- init[(length(ols_est) + length(b_init) + length(SGT_param)):(length(ols_est) + length(b_init) + length(SGT_param) + length(GARCH_param))]
+    }
+  }
+
+  # Check the feasibility of the initial values (p, q and r) (THIS IS IN WRONG PLACE)
   count <- 0
   if(var_adj == FALSE) {
     for(i in 1:m) {
@@ -262,8 +329,9 @@ init_rbsvar <- function(y,
   # Heuristic for skipping evaluation of Hessian in case of large parameter space
   if(is.null(skip_hessian)) {
     skip_hessian <- ifelse(length(pre_init) > 100, TRUE, FALSE)
-    if(verbose == TRUE & skip_hessian == TRUE) cat("Approximation of full Hessian to be skipped... \n")
+    if(verbose == TRUE & skip_hessian == TRUE & maxit > 0) cat("Approximation of full Hessian to be skipped... \n")
   }
+  if(maxit == 0) skip_hessian <- TRUE
 
   # Check whether prior covariance matrix of A is diagonal
   if(prior$A$cov[1] != -1) {
@@ -288,6 +356,7 @@ init_rbsvar <- function(y,
                    "A_rows" = ncol(xy$xx),
                    "t" = nrow(xy$yy),
                    "prior_A_diagonal" = prior_A_diagonal,
+                   "B_inverse" = B_inverse,
                    "mean_cent" = mean_cent,
                    "var_adj" = var_adj)
   if(lags == 0) cpp_args$A_rows <- 0
@@ -325,7 +394,7 @@ init_rbsvar <- function(y,
 #Estimates rbsvar model
 est_rbsvar <- function(model,
                        N,
-                       n = 4,
+                       n = 2,
                        K = 2,
                        m0 = NA,
                        gamma = NA,
@@ -373,7 +442,8 @@ est_rbsvar <- function(model,
                          output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
                          parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
                          yy = model$xy$yy, xx = model$xy$xx,
-                         m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t, yna_indices = model$cpp_args$yna_indices,
+                         m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                         yna_indices = model$cpp_args$yna_indices, B_inverse = cpp_args$B_inverse,
                          mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
                          first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
                          a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
@@ -445,7 +515,7 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
   ret <- (
     log_like(par, xy$yy, xy$xx,
              cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-             cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices,
+             cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
              cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
       log_prior(par, xy$yy, xy$xx,
                 cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
@@ -454,6 +524,52 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
                 prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
   )
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
+  ret
+}
+
+marginal_likelihood_rbsvar <- function(model,
+                                       output,
+                                       burn,
+                                       M = 100000,
+                                       J = 100000,
+                                       tune = 1,
+                                       parallel_likelihood = FALSE) {
+
+  start_time <- Sys.time()
+  tuned_gamma <- (2.38 / sqrt(2 * ncol(output$chains))) / tune
+  post <- output$chains[-c(1:(output$args$m0 + output$args$n * burn)),]
+  rndi <- sample.int(nrow(post), M, replace = T)
+  s <- post[rndi,]
+  s_star <- apply(s, 2, mean)
+  d_star <- eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood)
+  proposal_scale <- crossprod(s) / nrow(s)
+  # Proposal tuning goes here
+  proposal_steps <- mvtnorm::rmvnorm(n = J, sigma = proposal_scale)
+
+  cpp_out <- ml_cpp(s = s, s_star = s_star, d_star = d_star,
+                    proposal_scale = proposal_scale, proposal_steps = proposal_steps,
+                    M = M, J = J,
+                    yy = model$xy$yy, xx = model$xy$xx,
+                    m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                    yna_indices = model$cpp_args$yna_indices, B_inverse = cpp_args$B_inverse,
+                    mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
+                    first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
+                    a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
+                    b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
+                    p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
+                    q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                    r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
+                    parallel_likelihood = parallel_likelihood)
+
+  # logSumExp or something?
+  star_ordinate <- log(mean(exp(cpp_out[[1]]))) - log(mean(exp(cpp_out[[2]])))
+  log_marginal_likelihood <- eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood) - star_ordinate
+  log_ml <- log_marginal_likelihood
+
+  the_time <- Sys.time() - start_time
+  ret <- list("log_ml" = log_ml,
+              "cpp_out" = cpp_out,
+              "time" = the_time)
   ret
 }
 
