@@ -1,6 +1,7 @@
 
 #Finds optimal initial values NO EXPORT
 init_optim <- function(pre_init,
+                       type,
                        xy,
                        prior,
                        ols_cov,
@@ -364,6 +365,7 @@ init_rbsvar <- function(y,
   ### Optimal initial values ###
 
   init <- init_optim(pre_init = pre_init,
+                     type = type,
                      xy = xy,
                      prior = prior,
                      ols_cov = ols_cov,
