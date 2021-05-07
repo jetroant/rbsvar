@@ -140,7 +140,7 @@ init_rbsvar <- function(y,
                         verbose = TRUE) {
 
   start_time <- Sys.time()
-  xy <- rbsvar:::build_xy(y, lags, constant)
+  xy <- build_xy(y, lags, constant)
   xx <- xy$xx
   yy <- xy$yy
   m <- ncol(xy$yy)
@@ -401,7 +401,7 @@ est_rbsvar <- function(model,
                        n = 2,
                        K = 2,
                        m0 = NA,
-                       gamma = NA,
+                       rel_gamma = 1,
                        output = NULL,
                        new_chain = FALSE,
                        parallel_chains = FALSE,
@@ -412,7 +412,7 @@ est_rbsvar <- function(model,
 
   start_time <- Sys.time()
   d <- length(model$init$init_mode)
-  if(is.na(gamma)) gamma <- 2.38/sqrt(2*d)
+  gamma <- (2.38/sqrt(2*d)) * rel_gamma
   if(is.na(m0)) m0 <- n*d
 
   ### Informational messages
@@ -437,12 +437,18 @@ est_rbsvar <- function(model,
     output_as_input <- FALSE
   }
 
+  if(!output_as_input) {
+    init_draws <- mvtnorm::rmvnorm(n = m0, mean = model$init$init_mode, sigma = model$init$init_scale)
+  } else {
+    init_draws <- matrix(-1, ncol = length(model$init$init_mode))
+  }
+
   ### Max number of threads used
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
 
   ### Sampler runs here
   sampler_out <- rbsvar:::sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
-                                  init_mode = model$init$init_mode, init_scale = model$init$init_scale,
+                                  init_draws = init_draws,
                                   output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
                                   parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
                                   yy = model$xy$yy, xx = model$xy$xx,

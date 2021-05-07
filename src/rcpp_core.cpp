@@ -540,7 +540,7 @@ struct DrawParallel : public RcppParallel::Worker {
 
 // [[Rcpp::export]]
 Rcpp::List sampler(const int N, const int n, const int m0, const int K, const double gamma,
-                   const arma::vec init_mode, const arma::mat init_scale,
+                   const arma::mat init_draws,
                    const bool output_as_input, const arma::mat old_chain, const bool new_chain,
                    const bool parallel, const bool parallel_likelihood,
                    const arma::mat yy, const arma::mat xx,
@@ -573,21 +573,12 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   par_vec[14] = parallel_likelihood;
 
   //Initialize the chains
-  arma::mat draws(N * n + m0, init_mode.n_elem);
+  arma::mat draws(N * n + m0, init_draws.n_cols);
 
   //Initial chains/draws from multivariate normal...
   if(!output_as_input) {
     for(int i = 0; i != m0; ++i) {
-      arma::vec xn = arma::randn(init_mode.n_elem);
-      if(init_scale.size() > 1) {
-        draws.row(i) = init_mode.t() + xn.t() * arma::chol(init_scale);
-      } else {
-        arma::mat init_scale_root = init_mode.t();
-        for(int j = 0; j != init_mode.size(); ++j) {
-          init_scale_root(j) = sqrt(init_scale(0));
-        }
-        draws.row(i) = init_mode.t() + xn.t() % init_scale_root;
-      }
+      draws.row(i) = init_draws.row(i);
     }
 
   //...or from an existing sample
