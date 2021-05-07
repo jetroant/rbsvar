@@ -19,15 +19,15 @@ init_optim <- function(pre_init,
 
   obj_full <- function(state) {
     ret <- -(
-      log_like(state, xy$yy, xy$xx,
-               cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
-               cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
-        log_prior(state, xy$yy, xy$xx,
-                  cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                  cpp_args$m, cpp_args$A_rows, cpp_args$t,
-                  prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                  prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
+      rbsvar:::log_like(state, xy$yy, xy$xx,
+                        cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+                        cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
+                        cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
+        rbsvar:::log_prior(state, xy$yy, xy$xx,
+                           cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+                           cpp_args$m, cpp_args$A_rows, cpp_args$t,
+                           prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
+                           prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
     )
     if(ret == Inf) ret <- -min_density
     ret
@@ -140,7 +140,7 @@ init_rbsvar <- function(y,
                         verbose = TRUE) {
 
   start_time <- Sys.time()
-  xy <- build_xy(y, lags, constant)
+  xy <- rbsvar:::build_xy(y, lags, constant)
   xx <- xy$xx
   yy <- xy$yy
   m <- ncol(xy$yy)
@@ -365,22 +365,22 @@ init_rbsvar <- function(y,
 
   ### Optimal initial values ###
 
-  init <- init_optim(pre_init = pre_init,
-                     type = type,
-                     B_inverse = B_inverse,
-                     xy = xy,
-                     prior = prior,
-                     ols_cov = ols_cov,
-                     cpp_args = cpp_args,
-                     method = method,
-                     skip_hessian = skip_hessian,
-                     min_density = min_density,
-                     parallel_likelihood = parallel_likelihood,
-                     max_cores = max_cores,
-                     maxit = maxit,
-                     trace = trace,
-                     REPORT = REPORT,
-                     verbose = verbose)
+  init <- rbsvar:::init_optim(pre_init = pre_init,
+                              type = type,
+                              B_inverse = B_inverse,
+                              xy = xy,
+                              prior = prior,
+                              ols_cov = ols_cov,
+                              cpp_args = cpp_args,
+                              method = method,
+                              skip_hessian = skip_hessian,
+                              min_density = min_density,
+                              parallel_likelihood = parallel_likelihood,
+                              max_cores = max_cores,
+                              maxit = maxit,
+                              trace = trace,
+                              REPORT = REPORT,
+                              verbose = verbose)
 
   if(verbose == TRUE) cat(paste0("DONE. Robust bayesian ", type, " model initialized.\n"))
   model <- list("y" = y,
@@ -441,21 +441,21 @@ est_rbsvar <- function(model,
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
 
   ### Sampler runs here
-  sampler_out <- rbsvar::sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
-                                 init_mode = model$init$init_mode, init_scale = model$init$init_scale,
-                                 output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
-                                 parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
-                                 yy = model$xy$yy, xx = model$xy$xx,
-                                 m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                                 yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
-                                 mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                                 first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                                 a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                                 b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                                 p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                                 q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                                 r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                                 progress_bar = progress_bar)
+  sampler_out <- rbsvar:::sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
+                                  init_mode = model$init$init_mode, init_scale = model$init$init_scale,
+                                  output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
+                                  parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
+                                  yy = model$xy$yy, xx = model$xy$xx,
+                                  m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                                  yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
+                                  mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
+                                  first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
+                                  a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
+                                  b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
+                                  p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
+                                  q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                                  r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
+                                  progress_bar = progress_bar)
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
 
   ### Clean up the output
@@ -517,15 +517,15 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
   cpp_args <- model$cpp_args
   prior <- model$prior
   ret <- (
-    log_like(par, xy$yy, xy$xx,
-             cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-             cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
-             cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
-      log_prior(par, xy$yy, xy$xx,
-                cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                cpp_args$m, cpp_args$A_rows, cpp_args$t,
-                prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
+    rbsvar:::log_like(par, xy$yy, xy$xx,
+                      cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+                      cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
+                      cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
+      rbsvar:::log_prior(par, xy$yy, xy$xx,
+                         cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+                         cpp_args$m, cpp_args$A_rows, cpp_args$t,
+                         prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
+                         prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
   )
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
   ret
@@ -550,24 +550,24 @@ marginal_likelihood_rbsvar <- function(model,
   # Proposal tuning goes here
   proposal_steps <- mvtnorm::rmvnorm(n = J, sigma = proposal_scale)
 
-  cpp_out <- ml_cpp(s = s, s_star = s_star, d_star = d_star,
-                    proposal_scale = proposal_scale, proposal_steps = proposal_steps,
-                    M = M, J = J,
-                    yy = model$xy$yy, xx = model$xy$xx,
-                    m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                    yna_indices = model$cpp_args$yna_indices, B_inverse = cpp_args$B_inverse,
-                    mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                    first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                    a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                    b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                    p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                    q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                    r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                    parallel_likelihood = parallel_likelihood)
+  cpp_out <- rbsvar:::ml_cpp(s = s, s_star = s_star, d_star = d_star,
+                             proposal_scale = proposal_scale, proposal_steps = proposal_steps,
+                             M = M, J = J,
+                             yy = model$xy$yy, xx = model$xy$xx,
+                             m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                             yna_indices = model$cpp_args$yna_indices, B_inverse = cpp_args$B_inverse,
+                             mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
+                             first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
+                             a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
+                             b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
+                             p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
+                             q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                             r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
+                             parallel_likelihood = parallel_likelihood)
 
   # logSumExp or something?
   star_ordinate <- log(mean(exp(cpp_out[[1]]))) - log(mean(exp(cpp_out[[2]])))
-  log_marginal_likelihood <- eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood) - star_ordinate
+  log_marginal_likelihood <- rbsvar::eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood) - star_ordinate
   log_ml <- log_marginal_likelihood
 
   the_time <- Sys.time() - start_time
