@@ -183,7 +183,8 @@ irf <- function(model,
                 cumulate = c(),
                 shock_sizes = NULL,
                 shocks = NULL,
-                verbose = TRUE) {
+                verbose = TRUE,
+                parallel = FALSE) {
 
   if(requireNamespace("expm", quietly = TRUE)) {
     #Do nothing
@@ -191,6 +192,7 @@ irf <- function(model,
     stop("Package 'expm' needed for computation of impulse response functions. \n 'expm' was not found. The package can be installed by 'install.packages('expm')'. \n")
   }
 
+  # Collect inputs
   if(model$type != "svar") stop("model$type must be 'svar'")
   m <- ncol(model$y)
   p <- model$lags
@@ -201,6 +203,17 @@ irf <- function(model,
   if(is.null(shocks)) shocks <- 1:m
   b_indices <- (model$cpp_args$first_b + 1):model$cpp_args$first_sgt
   a_indices <- 1:model$cpp_args$first_b
+
+  # Posterior sample
+  #s <- output$chains[-c(1:(m0 + burn)),]
+  #s <- s[sample.int(nrow(s), N, replace = T),]
+
+  #B_inverse <- model$cpp_args$B_inverse
+  #if(length(cumulate) == 0) cumulate <- c(-1)
+  #ret <- irf_cpp(s, horizon = 3, cumulate,
+  #               shock_sizes, shocks,
+  #               model$cpp_args$A_rows, model$cpp_args$first_b, model$cpp_args$first_sgt, m,
+  #               B_inverse, parallel)
 
   #Compute and collect B_inv and A sample
   burn <- burn + 1

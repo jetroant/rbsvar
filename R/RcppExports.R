@@ -37,6 +37,14 @@ sampler <- function(N, n, m0, K, gamma, init_draws, output_as_input, old_chain, 
     .Call(`_rbsvar_sampler`, N, n, m0, K, gamma, init_draws, output_as_input, old_chain, new_chain, parallel, parallel_likelihood, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, progress_bar)
 }
 
+stackA_cpp <- function(A, constant = TRUE) {
+    .Call(`_rbsvar_stackA_cpp`, A, constant)
+}
+
+irf_cpp <- function(s, horizon, cumulate, shock_sizes, shocks, A_rows, first_b, first_sgt, m, B_inverse, parallel) {
+    .Call(`_rbsvar_irf_cpp`, s, horizon, cumulate, shock_sizes, shocks, A_rows, first_b, first_sgt, m, B_inverse, parallel)
+}
+
 ml_cpp <- function(s, s_star, d_star, proposal_scale, proposal_steps, M, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel_likelihood) {
     .Call(`_rbsvar_ml_cpp`, s, s_star, d_star, proposal_scale, proposal_steps, M, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel_likelihood)
 }

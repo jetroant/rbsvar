@@ -32,17 +32,26 @@ build_xy0 <- function(y, p, shrinkage, minnesota_means, constant = TRUE) {
   if(length(minnesota_means) != n) stop("'minnesota_means' not of length 'ncol(y)'.")
   arsigmas <- rep(NA, n)
   for(i in 1:n) arsigmas[i] <- sqrt(ar(y[,i], aic = F, order.max = p)$var.pred)
-  yy0 <- rbind(diag((minnesota_means * arsigmas) / shrinkage),
-               matrix(0, ncol = n, nrow = n*p - n + 1))
-  xx0 <- matrix(0, ncol = nrow(yy0) - 1, nrow = nrow(yy0) - 1)
-  for(i in 1:p) {
-    indices <- (n*i-n+1):(n*i)
-    diag(xx0)[indices] <- i * (arsigmas / shrinkage)
-  }
-  if(constant == TRUE) {
+  if(constant) {
+    yy0 <- rbind(diag((minnesota_means * arsigmas) / shrinkage),
+                 matrix(0, ncol = n, nrow = n*p - n + 1))
+    xx0 <- matrix(0, ncol = nrow(yy0) - 1, nrow = nrow(yy0) - 1)
+    for(i in 1:p) {
+      indices <- (n*i-n+1):(n*i)
+      diag(xx0)[indices] <- i * (arsigmas / shrinkage)
+    }
     xx0 <- cbind(0, xx0)
     xx0 <- rbind(xx0,
                  c(0.00001, rep(0, ncol(xx0)-1)))
+  } else {
+
+    yy0 <- rbind(diag((minnesota_means * arsigmas) / shrinkage),
+                 matrix(0, ncol = n, nrow = n*p - n))
+    xx0 <- matrix(0, ncol = nrow(yy0), nrow = nrow(yy0))
+    for(i in 1:p) {
+      indices <- (n*i-n+1):(n*i)
+      diag(xx0)[indices] <- i * (arsigmas / shrinkage)
+    }
   }
   ret <- list("xx0" = xx0, "yy0" = yy0, "arsigmas" = arsigmas)
   ret

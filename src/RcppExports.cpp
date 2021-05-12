@@ -225,6 +225,39 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// stackA_cpp
+arma::mat stackA_cpp(arma::mat A, const bool constant);
+RcppExport SEXP _rbsvar_stackA_cpp(SEXP ASEXP, SEXP constantSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const bool >::type constant(constantSEXP);
+    rcpp_result_gen = Rcpp::wrap(stackA_cpp(A, constant));
+    return rcpp_result_gen;
+END_RCPP
+}
+// irf_cpp
+Rcpp::List irf_cpp(const arma::mat s, const int horizon, const arma::vec cumulate, const arma::vec shock_sizes, const arma::vec shocks, const int A_rows, const int first_b, const int first_sgt, const int m, const bool B_inverse, const bool parallel);
+RcppExport SEXP _rbsvar_irf_cpp(SEXP sSEXP, SEXP horizonSEXP, SEXP cumulateSEXP, SEXP shock_sizesSEXP, SEXP shocksSEXP, SEXP A_rowsSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP mSEXP, SEXP B_inverseSEXP, SEXP parallelSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const arma::mat >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const int >::type horizon(horizonSEXP);
+    Rcpp::traits::input_parameter< const arma::vec >::type cumulate(cumulateSEXP);
+    Rcpp::traits::input_parameter< const arma::vec >::type shock_sizes(shock_sizesSEXP);
+    Rcpp::traits::input_parameter< const arma::vec >::type shocks(shocksSEXP);
+    Rcpp::traits::input_parameter< const int >::type A_rows(A_rowsSEXP);
+    Rcpp::traits::input_parameter< const int >::type first_b(first_bSEXP);
+    Rcpp::traits::input_parameter< const int >::type first_sgt(first_sgtSEXP);
+    Rcpp::traits::input_parameter< const int >::type m(mSEXP);
+    Rcpp::traits::input_parameter< const bool >::type B_inverse(B_inverseSEXP);
+    Rcpp::traits::input_parameter< const bool >::type parallel(parallelSEXP);
+    rcpp_result_gen = Rcpp::wrap(irf_cpp(s, horizon, cumulate, shock_sizes, shocks, A_rows, first_b, first_sgt, m, B_inverse, parallel));
+    return rcpp_result_gen;
+END_RCPP
+}
 // ml_cpp
 Rcpp::List ml_cpp(arma::mat s, arma::vec s_star, double d_star, const arma::mat proposal_scale, const arma::mat proposal_steps, const int M, const int J, const arma::mat yy, const arma::mat xx, const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, bool parallel_likelihood);
 RcppExport SEXP _rbsvar_ml_cpp(SEXP sSEXP, SEXP s_starSEXP, SEXP d_starSEXP, SEXP proposal_scaleSEXP, SEXP proposal_stepsSEXP, SEXP MSEXP, SEXP JSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP parallel_likelihoodSEXP) {
@@ -278,6 +311,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 21},
     {"_rbsvar_draw", (DL_FUNC) &_rbsvar_draw, 33},
     {"_rbsvar_sampler", (DL_FUNC) &_rbsvar_sampler, 36},
+    {"_rbsvar_stackA_cpp", (DL_FUNC) &_rbsvar_stackA_cpp, 2},
+    {"_rbsvar_irf_cpp", (DL_FUNC) &_rbsvar_irf_cpp, 11},
     {"_rbsvar_ml_cpp", (DL_FUNC) &_rbsvar_ml_cpp, 32},
     {NULL, NULL, 0}
 };

@@ -716,6 +716,121 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
 }
 
 // [[Rcpp::export]]
+arma::mat stackA_cpp(arma::mat A, const bool constant = true) {
+  A = A.t();
+  if(constant) A = A.cols(1, A.n_cols - 1);
+  const int m = A.n_rows;
+  const int lags = A.n_cols / m;
+  const int eye_dim = m * lags - m;
+  arma::mat AA(A.n_rows + eye_dim, A.n_cols, arma::fill::zeros);
+  for(int i = 0; i < A.n_rows; i++) {
+    AA.row(i) = A.row(i);
+  }
+  for(int i = A.n_rows; i < AA.n_rows; i++) {
+    for(int j = 0; j < AA.n_cols; j++) {
+      if((i - A.n_rows) == j) AA(i,j) = 1;
+    }
+  }
+  return(AA);
+}
+
+// [[Rcpp::export]]
+Rcpp::List irf_cpp(const arma::mat s, const int horizon, const arma::vec cumulate,
+                   const arma::vec shock_sizes, const arma::vec shocks,
+                   const int A_rows, const int first_b, const int first_sgt, const int m,
+                   const bool B_inverse, const bool parallel) {
+
+  Rcpp::List ret(shocks.size());
+
+  // Sequential
+  if(parallel == false) {
+
+    // Loop over shocks
+    for(int j = 0; j < shocks.size(); j++) {
+      arma::vec e(m, arma::fill::zeros);
+      e(shocks(j)) = shock_sizes(shocks(j));
+      arma::cube irfs(shocks.size(), horizon + 1, s.n_rows);
+
+      // Loop over posterior sample
+      for(int i = 0; i < s.n_rows; i++) {
+
+        // Construct A matrix
+        arma::mat A(A_rows, m);
+        if(A_rows > 0) {
+          for(int j = 0; j != first_b; ++j) A(j) = s.row(i)(j);
+        }
+        arma::mat AA = stackA_cpp(A);
+
+        // Construct B matrix
+        arma::mat B(m, m);
+
+        //SVAR or VAR (recursive)
+        if((first_sgt - first_b) == (m * m)) {
+          for(int j = first_b; j != first_sgt; ++j) {
+            B(j - first_b) = s.row(i)(j);
+          }
+        } else {
+          int row = 0;
+          int col = 1;
+          int index = 0;
+          for(int j = first_b; j != first_sgt; ++j) {
+            row = row + 1;
+            if(row > m) {
+              row = 1;
+              col = col + 1;
+            }
+            while(col > row) {
+              B(index) = 0;
+              index = index + 1;
+              row = row + 1;
+              if(row > m) {
+                row = 1;
+                col = col + 1;
+              }
+            }
+            B(index) = s.row(i)(j);
+            index = index + 1;
+          }
+        }
+        if(B_inverse) B = arma::inv(B);
+
+        // Loop over horizons
+        for(int h = 0; h < (horizon + 1); h++) {
+
+          arma::vec zero = B * e;
+          arma::vec zero_long(AA.n_cols, arma::fill::zeros);
+          if(h == 0) {
+            for(int hh = 0; hh < zero.size(); hh++) zero_long(hh) = zero(hh);
+            irfs.slice(i).col(h) = zero;
+          } else {
+            arma::vec response = arma::powmat(AA, (h-1)) * zero_long;
+            for(int hh = 0; hh < zero.size(); hh++) irfs.slice(i).col(h)(hh) = response(hh);
+          }
+        }
+      }
+
+      if(cumulate(0) != -1) {
+        for(int i = 0; i < s.n_rows; i++) {
+          for(int hh = 0; hh < cumulate.size(); hh++) {
+            for(int h = 1; h < (horizon + 1); h++) {
+              irfs.slice(i).row(cumulate(hh))(h) = arma::sum(irfs.slice(i).row(cumulate(hh)).subvec(0, h));
+            }
+          }
+        }
+      }
+      ret(j) = irfs;
+    }
+  }
+
+  // Parallel
+  if(parallel == true) {
+    //...
+  }
+
+  return(ret);
+}
+
+// [[Rcpp::export]]
 Rcpp::List ml_cpp(arma::mat s, arma::vec s_star, double d_star,
                  const arma::mat proposal_scale, const arma::mat proposal_steps,
                  const int M, const int J,
