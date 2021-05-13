@@ -227,65 +227,37 @@ irf <- function(model,
     stop("Package 'expm' needed for computation of impulse response functions. \n 'expm' was not found. The package can be installed by 'install.packages('expm')'. \n")
   }
 
+  # Posterior sample
+  post <- post_sample(output, burn, N)
+  s <- post$s
+
   # Collect inputs
   if(model$type != "svar") stop("model$type must be 'svar'")
   m <- ncol(model$y)
   p <- model$lags
-  n <- output$args$n
-  m0 <- output$args$m0
   ret <- list()
   if(is.null(shock_sizes)) shock_sizes <- rep(1, m)
   if(is.null(shocks)) shocks <- 1:m
   b_indices <- (model$cpp_args$first_b + 1):model$cpp_args$first_sgt
   a_indices <- 1:model$cpp_args$first_b
+  constant <- model$constant
+  B_inverse <- model$cpp_args$B_inverse
 
-  # Posterior sample
-  #s <- output$chains[-c(1:(m0 + burn)),]
-  #s <- s[sample.int(nrow(s), N, replace = T),]
-
-  #B_inverse <- model$cpp_args$B_inverse
+  # For Rcpp implementation to come:
   #if(length(cumulate) == 0) cumulate <- c(-1)
   #ret <- irf_cpp(s, horizon = 3, cumulate,
   #               shock_sizes, shocks,
   #               model$cpp_args$A_rows, model$cpp_args$first_b, model$cpp_args$first_sgt, m,
   #               B_inverse, parallel)
 
-  #Compute and collect B_inv and A sample
-  burn <- burn + 1
-  b_inv_list <- list()
-  a_list <- list()
-  for(i in 1:n) {
-
-    #Pick one chain
-    row_indices <- seq(from = m0 + i - n, by = n, length.out = output$args$N + 1)
-    one_chain <- output$chains[row_indices,][-c(1:burn),]
-
-    #Compute B_inv
-    b_chain <- one_chain[,b_indices]
-    b_inv_chain <- matrix(NA, ncol = m^2, nrow = nrow(b_chain))
-    for(j in 1:nrow(b_chain)) {
-      B <- diag(m)
-      B[,] <- b_chain[j,]
-      b_inv_chain[j,] <- c(solve(B))
-    }
-    b_inv_list[[i]] <- b_inv_chain
-
-    #Pick A
-    a_list[[i]] <- one_chain[,a_indices]
+  #Compute and collect B and A sample
+  a_sample <- matrix(NA, nrow = nrow(s), ncol = length(a_indices))
+  b_sample <- matrix(NA, nrow = nrow(s), ncol = length(b_indices))
+  for(i in 1:nrow(s)) {
+    a_sample[i,] <- s[i, a_indices]
+    b_sample[i,] <- s[i, b_indices]
+    if(B_inverse) b_sample[i,] <- c(solve(matrix(b_sample[i,], ncol = m)))
   }
-  for(i in 1:n) {
-    if(i == 1) {
-      full_binv <- b_inv_list[[i]]
-      full_a <- a_list[[i]]
-    } else {
-      full_binv <- rbind(full_binv, b_inv_list[[i]])
-      full_a <- rbind(full_a, a_list[[i]])
-    }
-  }
-
-  rows <- sample.int(nrow(full_a), N, replace = TRUE)
-  full_a <- full_a[rows,]
-  full_binv <- full_binv[rows,]
 
   for(shock_index in 1:m) {
 
@@ -296,20 +268,20 @@ irf <- function(model,
 
     e <- rep(0, m)
     e[shock_index] <- shock_sizes[shock_index]
-    irfs <- array(NA, dim = c(m, horizon+1, nrow(full_a)))
+    irfs <- array(NA, dim = c(m, horizon+1, nrow(s)))
 
     if(verbose == TRUE) print(paste0("Computing impulse responses... (", which(shocks == shock_index), "/", length(shocks), ")"))
-    if(verbose == TRUE) pb <- txtProgressBar(min = 0, max = nrow(full_a), style = 3)
-    for(row_index in 1:nrow(full_a)) {
+    if(verbose == TRUE) pb <- txtProgressBar(min = 0, max = nrow(s), style = 3)
+    for(row_index in 1:nrow(s)) {
 
-      B_inv <- diag(m)
-      B_inv[,] <- full_binv[row_index,]
-      A <- matrix(full_a[row_index,], ncol = m)
-      AA <- stackA(A)
+      B <- diag(m)
+      B[,] <- b_sample[row_index,]
+      A <- matrix(a_sample[row_index,], ncol = m)
+      AA <- stackA(A, constant = constant)
 
       for(h in 1:(horizon+1)) {
         if(h == 1) {
-          zero <- B_inv %*% e
+          zero <- B %*% e
           zero_long <- c(zero, rep(0, (ncol(AA)-length(zero))))
           irfs[,h,row_index] <- zero
         } else {
