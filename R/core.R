@@ -538,50 +538,6 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
   ret
 }
 
-marginal_likelihood_rbsvar <- function(model,
-                                       output,
-                                       burn,
-                                       M = 100000,
-                                       J = 100000,
-                                       tune = 1,
-                                       parallel_likelihood = FALSE) {
 
-  start_time <- Sys.time()
-  tuned_gamma <- (2.38 / sqrt(2 * ncol(output$chains))) / tune
-  post <- output$chains[-c(1:(output$args$m0 + output$args$n * burn)),]
-  rndi <- sample.int(nrow(post), M, replace = T)
-  s <- post[rndi,]
-  s_star <- apply(s, 2, mean)
-  d_star <- eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood)
-  proposal_scale <- crossprod(s) / nrow(s)
-  # Proposal tuning goes here
-  proposal_steps <- mvtnorm::rmvnorm(n = J, sigma = proposal_scale)
-
-  cpp_out <- rbsvar:::ml_cpp(s = s, s_star = s_star, d_star = d_star,
-                             proposal_scale = proposal_scale, proposal_steps = proposal_steps,
-                             M = M, J = J,
-                             yy = model$xy$yy, xx = model$xy$xx,
-                             m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                             yna_indices = model$cpp_args$yna_indices, B_inverse = cpp_args$B_inverse,
-                             mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                             first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                             a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                             b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                             p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                             q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                             r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                             parallel_likelihood = parallel_likelihood)
-
-  # logSumExp or something?
-  star_ordinate <- log(mean(exp(cpp_out[[1]]))) - log(mean(exp(cpp_out[[2]])))
-  log_marginal_likelihood <- rbsvar::eval_rbsvar(model, par = s_star, parallel_likelihood = parallel_likelihood) - star_ordinate
-  log_ml <- log_marginal_likelihood
-
-  the_time <- Sys.time() - start_time
-  ret <- list("log_ml" = log_ml,
-              "cpp_out" = cpp_out,
-              "time" = the_time)
-  ret
-}
 
 

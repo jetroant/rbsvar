@@ -175,6 +175,41 @@ plot_chains <- function(output,
   par(mfrow = c(1,1))
 }
 
+plot_densities <- function(output, verbose = TRUE, drop = 1) {
+  model <- output$model
+  d <- output$densities[-c(1:output$args$m0)]
+  n <- output$args$n
+  init_den <- eval_rbsvar(output$model)
+  par(mfrow = c(n,1))
+  for(i in 1:n) {
+    the_d <- d[seq(from = i, by = n, length.out = length(d)/n)][-c(1:drop)]
+    plot(ts(the_d, start = drop), ylab = paste0("Chain ", i))
+    abline(h = init_den, lty = 2)
+    if(i == 1) {
+      if(min(d[-c(1:(drop*n))]) < init_den) legend("topleft", c("Initial density"), lty = 2, bty = "n")
+    }
+    if(verbose) cat(paste0("Chain ", i, " - Last density: ", the_d[length(the_d)], " / Max density: ", max(the_d), "\n"))
+  }
+  if(verbose) cat(paste0("Initial density: ", init_den, "\n"))
+  par(mfrow = c(1,1))
+}
+
+post_sample <- function(output, burn = 0, N = NA) {
+  s <- output$chains[-c(1:output$args$m0),]
+  d <- output$densities[-c(1:output$args$m0)]
+  if(burn != 0) {
+    s <- s[-c(1:(burn*output$args$n)),]
+    d <- d[-c(1:(burn*output$args$n))]
+  }
+  if(!is.na(N)) {
+    rndi <- sample.int(nrow(s), N, replace = T)
+    s <- s[rndi,]
+    d <- d[rndi]
+  }
+  ret <- list("s" = s,
+              "d" = d)
+}
+
 irf <- function(model,
                 output,
                 burn = 0,
@@ -301,12 +336,16 @@ irf <- function(model,
 
 irf_plot <- function(irf_obj,
                      varnames = NULL,
-                     probs = NULL,
+                     probs = c(0.05, 0.16, 0.84, 0.95),
                      mar = c(2,2,2,1),
                      mfrow = NULL,
                      color = "tomato",
                      leg = TRUE,
+                     plot_median = FALSE,
                      normalize = NULL) {
+
+  if(max(probs) > 0.99 | min(probs) < 0.01) stop("Values of 'probs' need to be between 0.01 and 0.99.")
+  probs <- c(probs[1] - 0.01, probs, probs[length(probs)] + 0.01)
 
   if(requireNamespace("fanplot", quietly = TRUE)) {
     #Do nothing
@@ -335,27 +374,23 @@ irf_plot <- function(irf_obj,
 
     sub_irfs <- t(irf_obj[[row]][col,,])
     if(!is.null(normalize)) sub_irfs <- sub_irfs * normalize[col]
-    mean_sub_irfs <- ts(apply(sub_irfs, 2, mean), start = 0)
+    median_sub_irfs <- ts(apply(sub_irfs, 2, median), start = 0)
 
-    if(is.null(probs)) {
-      p <- c(0.0249, 0.025, seq(0.1, 0.9, 0.1), 0.975, 0.9751)
-    } else {
-      p <- probs
-    }
-    quant <- function(column) quantile(column, probs = p)
+    quant <- function(column) quantile(column, probs = probs)
     quantiles_sub_irfs <- apply(sub_irfs, 2, quant)
 
-    plot(mean_sub_irfs, lwd = 2, lty = 2, col = color, ylab = "", xlab = "",
+    plot(median_sub_irfs, lwd = 2, lty = 2, col = color, ylab = "", xlab = "",
          main = paste0("Shock ", row, " on ", varnames[col]),
          ylim = c(min(quantiles_sub_irfs), max(quantiles_sub_irfs)))
     grid()
-    fanplot::fan(data = quantiles_sub_irfs, data.type = "values", probs = p,
+    fanplot::fan(data = quantiles_sub_irfs, data.type = "values", probs = probs,
                  start = 0, fan.col = colorRampPalette(c(color, "white")),
                  rlab = NULL, ln = NULL)
     abline(h = 0, lwd = 2, lty = 2)
+    if(plot_median) lines(median_sub_irfs, lwd = 2, lty = 1)
 
-    post_mass <- (max(p[-length(p)]) - min(p[-1]))*100
-    if(col == 1 & row == 1 & leg == TRUE) legend("topright", c(paste0(post_mass,"% of post. prob. mass")), lwd = 0, bty = "n", col = "tomato")
+    post_mass <- (max(probs[-length(probs)]) - min(probs[-1]))*100
+    if(col == 1 & row == 1 & leg == TRUE) legend("topleft", c(paste0(post_mass,"% of post. prob. mass")), lwd = 0, bty = "n", col = "tomato")
   }
   par(mfrow = c(1,1))
 }
@@ -535,6 +570,63 @@ narrative_sign_probs <- function(decomp_obj,
   }
   ret <- rbind(probs, total_probs)
   rownames(ret) <- c(1:length(dates), "Total")
+  ret
+}
+
+marginal_likelihood <- function(output,
+                                model,
+                                burn,
+                                M = NA,
+                                J = NULL,
+                                rel_tune = 1,
+                                parallel = FALSE,
+                                parallel_likelihood = FALSE) {
+
+  post <- post_sample(output, burn, M)
+  s <- post$s
+  if(is.null(J)) J <- nrow(s) * 10
+
+  # Too high J seems to induce irregular problems with C stack limit...
+  # J = 10 000 seems to provide reasonable accuracy in most cases.
+  if(J > 10000) J <- 10000
+
+  tune <- (2.38 / sqrt(2 * ncol(s))) * rel_tune
+  s_demeaned <- scale(s, scale = FALSE)
+  sigma_star <- (crossprod(s_demeaned) / nrow(s_demeaned)) * tune^2
+
+  # To be used when zero restrictions are allowed
+  #if(FALSE) {
+  #  nodev <- which(diag(sigma_star) == 0) - 1
+  #} else {
+  #  nodev <- c(-1)
+  #}
+  if(min(eigen(sigma_star)$val) < 0) diag(sigma_star) <- diag(sigma_star) + abs(min(eigen(sigma_star)$val)) + 0.0001
+
+  theta_star <- apply(s, 2, mean)
+  logden_star <- eval_rbsvar(model, par = theta_star)
+  theta_maxden <- s[which(post$d == max(post$d))[1],]
+  while(logden_star == -Inf) {
+    theta_star <- theta_star + (theta_maxden - theta_star) / 2
+    logden_star <- eval_rbsvar(model, par = theta_star)
+  }
+
+  ret <- log_ml_cpp(posterior_sample = s, posterior_densities = post$d,
+                    theta_star = theta_star, sigma_star = sigma_star, logden_star = logden_star, J = J,
+                    yy = model$xy$yy, xx = model$xy$xx,
+                    m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
+                    yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
+                    mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
+                    first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
+                    a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
+                    b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
+                    p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
+                    q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
+                    r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
+                   #nodev = nodev,
+                    parallel = parallel, parallel_likelihood = parallel_likelihood)
+
+  names(ret) <- c("log_marginal_likelihood", "log_mean_posterior_ordinate",
+                  "numerator_log_vec", "denumerator_log_vec")
   ret
 }
 

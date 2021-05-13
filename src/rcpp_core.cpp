@@ -1,7 +1,10 @@
 // [[Rcpp::depends(RcppParallel)]]
 // [[Rcpp::depends(RcppArmadillo)]]
+// [[Rcpp::depends(RcppDist)]]
 #include <RcppParallel.h>
 #include <RcppArmadillo.h>
+#include <mvt.h>
+#include <4beta.h>
 
 // [[Rcpp::export]]
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
@@ -554,7 +557,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
                    const double r_prior_mode, const double r_prior_scale,
                    const bool progress_bar) {
 
-  //Collect parameters
+  // Collect parameters
   Rcpp::NumericVector par_vec(12);
   par_vec[0] = N;
   par_vec[1] = n;
@@ -830,86 +833,206 @@ Rcpp::List irf_cpp(const arma::mat s, const int horizon, const arma::vec cumulat
   return(ret);
 }
 
-// [[Rcpp::export]]
-Rcpp::List ml_cpp(arma::mat s, arma::vec s_star, double d_star,
-                 const arma::mat proposal_scale, const arma::mat proposal_steps,
-                 const int M, const int J,
-                 const arma::mat yy, const arma::mat xx,
-                 const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
-                 const bool mean_cent, const bool var_adj,
-                 const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                 const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
-                 const arma::vec b_mean, const arma::mat b_cov,
-                 const double p_prior_mode, const double p_prior_scale,
-                 const double q_prior_mode, const double q_prior_scale,
-                 const double r_prior_mode, const double r_prior_scale,
-                 bool parallel_likelihood) {
+// Marginal likelihood:
 
-  Rcpp::List ret_list(2);
-
-  arma::vec t1(M);
-  for(int i = 0; i != M; i++) {
-
-    // Log posterior density
-    arma::vec iter_state = s.row(i).t();
-    double iter_den =
-      log_like(iter_state, yy, xx,
-               first_b, first_sgt, first_garch, first_yna,
-               m, A_rows, t, yna_indices, B_inverse,
-               mean_cent, var_adj, parallel_likelihood)
-    + log_prior(iter_state, yy, xx,
-                first_b, first_sgt, first_garch, first_yna,
-                m, A_rows, t,
-                a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                p_prior_mode, p_prior_scale,
-                q_prior_mode, q_prior_scale,
-                r_prior_mode, r_prior_scale);
-
-    // Log acceptance probability
-    double log_ap = d_star - iter_den;
-    if(log_ap > 0) log_ap = 0;
-
-    // Implied step from proposal and its log density
-    arma::vec step =  s_star - iter_state;
-    double step_den = dmvnrm_arma(step,
-                                  arma::vec(s_star.size(), arma::fill::zeros),
-                                  proposal_scale);
-
-    t1(i) = log_ap + step_den;
+double log_alpha(const double numerator_density, const double denumerator_density) {
+  double ret = numerator_density - denumerator_density;
+  if(ret > 0) {
+    return 0;
+  } else {
+    return ret;
   }
-
-  arma::vec t2(J);
-  for(int i = 0; i != J; i++) {
-
-    // Step from the proposal
-    arma::vec step = proposal_steps.row(i).t();
-
-    // Implied step from proposal and its log density
-    arma::vec proposal = s_star + step;
-    double proposal_den =
-      log_like(proposal, yy, xx,
-               first_b, first_sgt, first_garch, first_yna,
-               m, A_rows, t, yna_indices, B_inverse,
-               mean_cent, var_adj, parallel_likelihood)
-      + log_prior(proposal, yy, xx,
-                  first_b, first_sgt, first_garch, first_yna,
-                  m, A_rows, t,
-                  a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                  p_prior_mode, p_prior_scale,
-                  q_prior_mode, q_prior_scale,
-                  r_prior_mode, r_prior_scale);
-
-    // Log acceptance probability
-    double log_ap = proposal_den - d_star;
-    if(log_ap > 0) log_ap = 0;
-
-    t2(i) = log_ap;
-  }
-
-  ret_list[0] = t1;
-  ret_list[1] = t2;
-  return ret_list;
 }
 
+double dproposal(const arma::vec theta, const arma::vec theta_star, const arma::mat sigma_star) {
+  arma::mat x = theta.t();
+  arma::vec retvec = dmvt(x, theta_star, sigma_star, 1, true);
+  double ret = retvec(0);
+  return ret;
+}
 
+struct MlParallel : public RcppParallel::Worker {
+
+  // Output
+  arma::vec& denumerator_log_vec;
+
+  // Inputs
+  arma::mat& proposal_mat;
+  const double logden_star;
+
+  const arma::mat& yy;
+  const arma::mat& xx;
+  const int first_b;
+  const int first_sgt;
+  const int first_garch;
+  const int first_yna;
+  const int m;
+  const int A_rows;
+  const int t;
+  const arma::vec yna_indices;
+  const bool B_inverse;
+  const bool mean_cent;
+  const bool var_adj;
+  const bool parallel_likelihood;
+
+  const arma::vec a_mean;
+  const arma::mat a_cov;
+  const bool prior_A_diagonal;
+  const arma::vec b_mean;
+  const arma::mat b_cov;
+  const double p_prior_mode;
+  const double p_prior_scale;
+  const double q_prior_mode;
+  const double q_prior_scale;
+  const double r_prior_mode;
+  const double r_prior_scale;
+
+  // Constructor
+  MlParallel(arma::vec& denumerator_log_vec, arma::mat& proposal_mat, const double logden_star,
+             const arma::mat& yy, const arma::mat& xx,
+             const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+             const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
+             const bool mean_cent, const bool var_adj, const bool parallel_likelihood,
+             const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov,
+             const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale,
+             const double r_prior_mode, const double r_prior_scale)
+    : denumerator_log_vec(denumerator_log_vec), proposal_mat(proposal_mat), logden_star(logden_star),
+      yy(yy), xx(xx),
+      first_b(first_b), first_sgt(first_sgt), first_garch(first_garch), first_yna(first_yna),
+      m(m), A_rows(A_rows), t(t), yna_indices(yna_indices), B_inverse(B_inverse),
+      mean_cent(mean_cent), var_adj(var_adj), parallel_likelihood(parallel_likelihood),
+      a_mean(a_mean), a_cov(a_cov), prior_A_diagonal(prior_A_diagonal), b_mean(b_mean), b_cov(b_cov),
+      p_prior_mode(p_prior_mode), p_prior_scale(p_prior_scale), q_prior_mode(q_prior_mode), q_prior_scale(q_prior_scale),
+      r_prior_mode(r_prior_mode), r_prior_scale(r_prior_scale) {}
+
+  //  Instructions
+  void operator()(std::size_t begin, std::size_t end) {
+    for(int j = begin; j != end; ++j) {
+      arma::vec proposal = proposal_mat.row(j).t();
+      double prop_ll = log_like(proposal, yy, xx,
+                                first_b, first_sgt, first_garch, first_yna,
+                                m, A_rows, t, yna_indices, B_inverse,
+                                mean_cent, var_adj, parallel_likelihood);
+      double prop_lp = log_prior(proposal, yy, xx,
+                                 first_b, first_sgt, first_garch, first_yna,
+                                 m, A_rows, t,
+                                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                                 p_prior_mode, p_prior_scale,
+                                 q_prior_mode, q_prior_scale,
+                                 r_prior_mode, r_prior_scale);
+      double proposal_density = prop_ll + prop_lp;
+      denumerator_log_vec(j) = log_alpha(proposal_density, logden_star);
+    }
+  }
+};
+
+// For Debugging
+// [[Rcpp::export]]
+void log_text(std::string text, int iter) {
+  std::ofstream myfile;
+  myfile.open("log.txt");
+  myfile << text << " / iter = " << iter << " \n";
+  myfile.close();
+  return void();
+}
+
+// [[Rcpp::export]]
+Rcpp::List log_ml_cpp(const arma::mat posterior_sample, const arma::vec posterior_densities,
+                      const arma::vec theta_star, const arma::mat sigma_star, const double logden_star,
+                      const arma::uword J,
+                      const arma::mat& yy, const arma::mat& xx,
+                      const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
+                      const bool mean_cent, const bool var_adj,
+                      const int first_b, const int first_sgt, const int first_garch, const int first_yna,
+                      const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
+                      const arma::vec b_mean, const arma::mat b_cov,
+                      const double p_prior_mode, const double p_prior_scale,
+                      const double q_prior_mode, const double q_prior_scale,
+                      const double r_prior_mode, const double r_prior_scale,
+                      const bool parallel = false, const bool parallel_likelihood = false) {
+
+  log_text("log_ml_cpp starts", 0);
+
+  arma::vec numerator_log_vec(posterior_sample.n_rows);
+  for(int i = 0; i < numerator_log_vec.size(); i++) {
+    arma::vec theta = posterior_sample.row(i).t();
+    double theta_density = posterior_densities(i);
+    double proposal_density = dproposal(theta, theta_star, sigma_star);
+    numerator_log_vec(i) = log_alpha(logden_star, theta_density) + proposal_density;
+    log_text("First loop, ", i);
+  }
+
+  log_text("First loop has ended", 0);
+
+  arma::vec denumerator_log_vec(J);
+  arma::mat proposal_mat = rmvt(J, theta_star, sigma_star, 1);
+
+  // Will be used in the future with zero restrictions
+  //if(false) {
+  //  for(int i = 0; i != no_dev.size(); i++) {
+  //    arma::vec theta_star_col(proposal_mat.n_rows);
+  //    theta_star_col.fill(theta_star(no_dev(i)));
+  //    proposal_mat.col(no_dev(i)) = theta_star_col;
+  //  }
+  //}
+
+  log_text("Main loop starts", 0);
+
+  // Sequential
+  if(parallel == false) {
+    for(int j = 0; j < J; j++) {
+
+      log_text("Main loop - Drawing proposal...", j);
+      arma::vec proposal = proposal_mat.row(j).t();
+
+      log_text("Main loop - Computing likelihood...", j);
+
+      double prop_ll = log_like(proposal, yy, xx,
+                                first_b, first_sgt, first_garch, first_yna,
+                                m, A_rows, t, yna_indices, B_inverse,
+                                mean_cent, var_adj, parallel_likelihood);
+
+      log_text("Main loop - Computing prior...", j);
+
+      double prop_lp = log_prior(proposal, yy, xx,
+                                 first_b, first_sgt, first_garch, first_yna,
+                                 m, A_rows, t,
+                                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                                 p_prior_mode, p_prior_scale,
+                                 q_prior_mode, q_prior_scale,
+                                 r_prior_mode, r_prior_scale);
+
+      log_text("Main loop - Finishing...", j);
+
+      double proposal_density = prop_ll + prop_lp;
+
+      denumerator_log_vec(j) = log_alpha(proposal_density, logden_star);
+    }
+  }
+
+  log_text("Main loop has ended", 0);
+
+  // Parallel
+  if(parallel== true) {
+    MlParallel Wrkr(denumerator_log_vec, proposal_mat, logden_star,
+                    yy, xx,
+                    first_b, first_sgt, first_garch, first_yna,
+                    m, A_rows, t, yna_indices, B_inverse,
+                    mean_cent, var_adj, parallel_likelihood,
+                    a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
+                    p_prior_mode, p_prior_scale,
+                    q_prior_mode, q_prior_scale,
+                    r_prior_mode, r_prior_scale);
+    parallelFor(0, denumerator_log_vec.size(), Wrkr);
+  }
+
+  double log_posterior_ordinate = log(mean(exp(numerator_log_vec)) / mean(exp(denumerator_log_vec)));
+  double log_marginal_likelihood = logden_star - log_posterior_ordinate;
+  Rcpp::List ret_list(4);
+  ret_list[0] = log_marginal_likelihood;
+  ret_list[1] = log_posterior_ordinate;
+  ret_list[2] = numerator_log_vec;
+  ret_list[3] = denumerator_log_vec;
+  return ret_list;
+}
 
