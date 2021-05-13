@@ -270,12 +270,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // log_ml_cpp
-Rcpp::List log_ml_cpp(const arma::mat posterior_sample, const arma::vec posterior_densities, const arma::vec theta_star, const arma::mat sigma_star, const double logden_star, const arma::uword J, const arma::mat& yy, const arma::mat& xx, const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, const bool parallel, const bool parallel_likelihood);
-RcppExport SEXP _rbsvar_log_ml_cpp(SEXP posterior_sampleSEXP, SEXP posterior_densitiesSEXP, SEXP theta_starSEXP, SEXP sigma_starSEXP, SEXP logden_starSEXP, SEXP JSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP parallelSEXP, SEXP parallel_likelihoodSEXP) {
+Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec posterior_densities, const arma::vec theta_star, const arma::mat sigma_star, const double logden_star, const arma::uword J, const arma::mat& yy, const arma::mat& xx, const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, const bool parallel, const bool parallel_likelihood);
+RcppExport SEXP _rbsvar_log_ml_cpp(SEXP proposal_densitiesSEXP, SEXP posterior_densitiesSEXP, SEXP theta_starSEXP, SEXP sigma_starSEXP, SEXP logden_starSEXP, SEXP JSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP parallelSEXP, SEXP parallel_likelihoodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const arma::mat >::type posterior_sample(posterior_sampleSEXP);
+    Rcpp::traits::input_parameter< const arma::vec >::type proposal_densities(proposal_densitiesSEXP);
     Rcpp::traits::input_parameter< const arma::vec >::type posterior_densities(posterior_densitiesSEXP);
     Rcpp::traits::input_parameter< const arma::vec >::type theta_star(theta_starSEXP);
     Rcpp::traits::input_parameter< const arma::mat >::type sigma_star(sigma_starSEXP);
@@ -307,7 +307,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type r_prior_scale(r_prior_scaleSEXP);
     Rcpp::traits::input_parameter< const bool >::type parallel(parallelSEXP);
     Rcpp::traits::input_parameter< const bool >::type parallel_likelihood(parallel_likelihoodSEXP);
-    rcpp_result_gen = Rcpp::wrap(log_ml_cpp(posterior_sample, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel, parallel_likelihood));
+    rcpp_result_gen = Rcpp::wrap(log_ml_cpp(proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel, parallel_likelihood));
     return rcpp_result_gen;
 END_RCPP
 }

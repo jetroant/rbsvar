@@ -554,6 +554,7 @@ marginal_likelihood <- function(output,
                                 parallel = FALSE,
                                 parallel_likelihood = FALSE) {
 
+  start_time <- Sys.time()
   post <- post_sample(output, burn, M)
   s <- post$s
   if(is.null(J)) J <- nrow(s) * 10
@@ -596,7 +597,10 @@ marginal_likelihood <- function(output,
     if(count < 0) stop("Something went wrong. (while-loop never ended)")
   }
 
-  ret <- log_ml_cpp(posterior_sample = s, posterior_densities = post$d,
+  # Compute proposal densities (R-implementation is more robust than RcppDist implementation)
+  proposal_densities <- mvtnorm::dmvt(s, delta = theta_star, sigma = sigma_star, df = 1, log = TRUE)
+
+  ret <- log_ml_cpp(proposal_densities = proposal_densities, posterior_densities = post$d,
                     theta_star = theta_star, sigma_star = sigma_star, logden_star = logden_star, J = J,
                     yy = model$xy$yy, xx = model$xy$xx,
                     m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
@@ -613,6 +617,7 @@ marginal_likelihood <- function(output,
 
   names(ret) <- c("log_marginal_likelihood", "log_mean_posterior_ordinate",
                   "numerator_log_vec", "denumerator_log_vec")
+  ret$time <- Sys.time() - start_time
   ret
 }
 

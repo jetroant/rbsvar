@@ -937,7 +937,7 @@ void log_text(std::string text, int iter) {
 }
 
 // [[Rcpp::export]]
-Rcpp::List log_ml_cpp(const arma::mat posterior_sample, const arma::vec posterior_densities,
+Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec posterior_densities,
                       const arma::vec theta_star, const arma::mat sigma_star, const double logden_star,
                       const arma::uword J,
                       const arma::mat& yy, const arma::mat& xx,
@@ -953,11 +953,10 @@ Rcpp::List log_ml_cpp(const arma::mat posterior_sample, const arma::vec posterio
 
   log_text("log_ml_cpp starts", 0);
 
-  arma::vec numerator_log_vec(posterior_sample.n_rows);
+  arma::vec numerator_log_vec(proposal_densities.size());
   for(int i = 0; i < numerator_log_vec.size(); i++) {
-    arma::vec theta = posterior_sample.row(i).t();
     double theta_density = posterior_densities(i);
-    double proposal_density = dproposal(theta, theta_star, sigma_star);
+    double proposal_density = proposal_densities(i);
     numerator_log_vec(i) = log_alpha(logden_star, theta_density) + proposal_density;
     log_text("First loop, ", i);
   }

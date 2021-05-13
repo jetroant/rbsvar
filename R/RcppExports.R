@@ -49,7 +49,7 @@ log_text <- function(text, iter) {
     invisible(.Call(`_rbsvar_log_text`, text, iter))
 }
 
-log_ml_cpp <- function(posterior_sample, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel = FALSE, parallel_likelihood = FALSE) {
-    .Call(`_rbsvar_log_ml_cpp`, posterior_sample, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel, parallel_likelihood)
+log_ml_cpp <- function(proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel = FALSE, parallel_likelihood = FALSE) {
+    .Call(`_rbsvar_log_ml_cpp`, proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel, parallel_likelihood)
 }
 
