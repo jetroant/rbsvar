@@ -269,6 +269,17 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// logSumExp
+double logSumExp(arma::vec x);
+RcppExport SEXP _rbsvar_logSumExp(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::vec >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(logSumExp(x));
+    return rcpp_result_gen;
+END_RCPP
+}
 // log_ml_cpp
 Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec posterior_densities, const arma::vec theta_star, const arma::mat sigma_star, const double logden_star, const arma::uword J, const arma::mat& yy, const arma::mat& xx, const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, const bool parallel, const bool parallel_likelihood);
 RcppExport SEXP _rbsvar_log_ml_cpp(SEXP proposal_densitiesSEXP, SEXP posterior_densitiesSEXP, SEXP theta_starSEXP, SEXP sigma_starSEXP, SEXP logden_starSEXP, SEXP JSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP parallelSEXP, SEXP parallel_likelihoodSEXP) {
@@ -325,6 +336,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_stackA_cpp", (DL_FUNC) &_rbsvar_stackA_cpp, 2},
     {"_rbsvar_irf_cpp", (DL_FUNC) &_rbsvar_irf_cpp, 11},
     {"_rbsvar_log_text", (DL_FUNC) &_rbsvar_log_text, 2},
+    {"_rbsvar_logSumExp", (DL_FUNC) &_rbsvar_logSumExp, 1},
     {"_rbsvar_log_ml_cpp", (DL_FUNC) &_rbsvar_log_ml_cpp, 32},
     {NULL, NULL, 0}
 };

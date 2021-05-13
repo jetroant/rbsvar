@@ -937,6 +937,13 @@ void log_text(std::string text, int iter) {
 }
 
 // [[Rcpp::export]]
+double logSumExp(arma::vec x) {
+  double x_max = max(x);
+  arma::vec x_tilde = x - x_max;
+  return(x_max + log(sum(exp(x_tilde))));
+}
+
+// [[Rcpp::export]]
 Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec posterior_densities,
                       const arma::vec theta_star, const arma::mat sigma_star, const double logden_star,
                       const arma::uword J,
@@ -1025,7 +1032,9 @@ Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec poster
     parallelFor(0, denumerator_log_vec.size(), Wrkr);
   }
 
-  double log_posterior_ordinate = log(mean(exp(numerator_log_vec)) / mean(exp(denumerator_log_vec)));
+  double log_numerator = -log(numerator_log_vec.size()) + logSumExp(numerator_log_vec);
+  double log_denumerator = -log(denumerator_log_vec.size()) + logSumExp(denumerator_log_vec);
+  double log_posterior_ordinate = log_numerator - log_denumerator;
   double log_marginal_likelihood = logden_star - log_posterior_ordinate;
   Rcpp::List ret_list(4);
   ret_list[0] = log_marginal_likelihood;
