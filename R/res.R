@@ -557,11 +557,10 @@ marginal_likelihood <- function(output,
   start_time <- Sys.time()
   post <- post_sample(output, burn, M)
   s <- post$s
-  if(is.null(J)) J <- nrow(s) * 10
 
   # Too high J seems to induce irregular problems with C stack limit...
-  # J = 10 000 seems to provide reasonable accuracy in most cases.
-  if(J > 10000) J <- 10000
+  # J = 10 000 seems to provide reasonable accuracy at least in some cases...
+  if(is.null(J)) J <- 10000
 
   tune <- (2.38 / sqrt(2 * ncol(s))) * rel_tune
   s_demeaned <- scale(s, scale = FALSE)
