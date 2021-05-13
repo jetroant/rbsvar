@@ -577,9 +577,23 @@ marginal_likelihood <- function(output,
   theta_star <- apply(s, 2, mean)
   logden_star <- eval_rbsvar(model, par = theta_star)
   theta_maxden <- s[which(post$d == max(post$d))[1],]
+
+  # If density of theta_star is higher than point in the sample, algorithm fails
+  count <- 10
+  while(logden_star > eval_rbsvar(model, par = theta_maxden)) {
+    theta_star <- theta_star + rnorm(length(theta_star), 0, 1) * sqrt(diag(sigma_star))
+    logden_star <- eval_rbsvar(model, par = theta_star)
+    count <- count - 1
+    if(count < 0) stop("Something went wrong. (while-loop never ended)")
+  }
+
+  # If density is not well defined at theta_star, algorithm fails
+  count <- 10
   while(logden_star == -Inf) {
     theta_star <- theta_star + (theta_maxden - theta_star) / 2
     logden_star <- eval_rbsvar(model, par = theta_star)
+    count <- count - 1
+    if(count < 0) stop("Something went wrong. (while-loop never ended)")
   }
 
   ret <- log_ml_cpp(posterior_sample = s, posterior_densities = post$d,
