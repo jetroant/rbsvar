@@ -25,8 +25,12 @@ log_like <- function(state, yy, xx, first_b, first_sgt, first_garch, first_yna, 
     .Call(`_rbsvar_log_like`, state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, parallel_likelihood)
 }
 
-log_prior <- function(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale) {
-    .Call(`_rbsvar_log_prior`, state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale)
+check_permutation <- function(B) {
+    .Call(`_rbsvar_check_permutation`, B)
+}
+
+log_prior <- function(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, B_inverse) {
+    .Call(`_rbsvar_log_prior`, state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, B_inverse)
 }
 
 draw <- function(draws, densities, asums, state_row, last_row, gamma, K, n, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, yna_indices, B_inverse, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, mean_cent, var_adj, parallel_likelihood) {

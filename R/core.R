@@ -229,9 +229,15 @@ init_rbsvar <- function(y,
     xy$xx <- matrix(0)
   }
 
+  if(verbose) {
+    if(prior$A$mean[1] == -1 | prior$B$mean[1] == -1) cat("Note: Prior is improper. \n")
+  }
+
   # B
   if(type == "svar") {
     B_init <- expm::sqrtm(sigma)
+    right_permutation <- check_permutation(B_init)
+    if(!right_permutation) stop("Initial values not consistent with the prior (This should not happen. Please contact the author of the package.).")
     Binv_init <- solve(B_init)
     if(B_inverse) b_init <- c(Binv_init) else b_init <- c(B_init)
   }
@@ -532,7 +538,8 @@ eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_core
                          cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
                          cpp_args$m, cpp_args$A_rows, cpp_args$t,
                          prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                         prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
+                         prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2],
+                         cpp_args$B_inverse)
   )
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
   ret

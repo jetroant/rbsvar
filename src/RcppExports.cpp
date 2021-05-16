@@ -106,9 +106,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// check_permutation
+bool check_permutation(arma::mat B);
+RcppExport SEXP _rbsvar_check_permutation(SEXP BSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::mat >::type B(BSEXP);
+    rcpp_result_gen = Rcpp::wrap(check_permutation(B));
+    return rcpp_result_gen;
+END_RCPP
+}
 // log_prior
-double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const int m, const int A_rows, const int t, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale);
-RcppExport SEXP _rbsvar_log_prior(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP) {
+double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const int m, const int A_rows, const int t, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, const bool B_inverse);
+RcppExport SEXP _rbsvar_log_prior(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP B_inverseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -133,7 +144,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type q_prior_scale(q_prior_scaleSEXP);
     Rcpp::traits::input_parameter< const double >::type r_prior_mode(r_prior_modeSEXP);
     Rcpp::traits::input_parameter< const double >::type r_prior_scale(r_prior_scaleSEXP);
-    rcpp_result_gen = Rcpp::wrap(log_prior(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale));
+    Rcpp::traits::input_parameter< const bool >::type B_inverse(B_inverseSEXP);
+    rcpp_result_gen = Rcpp::wrap(log_prior(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, B_inverse));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -330,7 +342,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_fill_xx", (DL_FUNC) &_rbsvar_fill_xx, 4},
     {"_rbsvar_garch_out", (DL_FUNC) &_rbsvar_garch_out, 6},
     {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 15},
-    {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 21},
+    {"_rbsvar_check_permutation", (DL_FUNC) &_rbsvar_check_permutation, 1},
+    {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 22},
     {"_rbsvar_draw", (DL_FUNC) &_rbsvar_draw, 33},
     {"_rbsvar_sampler", (DL_FUNC) &_rbsvar_sampler, 36},
     {"_rbsvar_stackA_cpp", (DL_FUNC) &_rbsvar_stackA_cpp, 2},

@@ -305,6 +305,25 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
 }
 
 // [[Rcpp::export]]
+bool check_permutation(arma::mat B) {
+  arma::vec euclidean_norms(B.n_cols);
+  for(int j = 0; j != B.n_cols; j++) euclidean_norms(j) = arma::sum(B.col(j) % B.col(j));
+  euclidean_norms = arma::sqrt(euclidean_norms);
+  for(int j = 0; j != B.n_cols; j++) B.col(j) = B.col(j) / euclidean_norms(j);
+  for(int i = 0; i != B.n_rows; i++) {
+    for(int j = 0; j != B.n_cols; j++) {
+      if(i == j) {
+        if(B(i,j) <= 0) return false;
+      }
+      if(i < j) {
+        if(abs(B(i,i)) <= B(i,j)) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// [[Rcpp::export]]
 double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
                  const int first_b, const int first_sgt, const int first_garch, const int first_yna,
                  const int m, const int A_rows, const int t,
@@ -312,7 +331,8 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
                  const arma::vec b_mean, const arma::mat b_cov,
                  const double p_prior_mode, const double p_prior_scale,
                  const double q_prior_mode, const double q_prior_scale,
-                 const double r_prior_mode, const double r_prior_scale) {
+                 const double r_prior_mode, const double r_prior_scale,
+                 const bool B_inverse) {
 
   //Prior on A (e.g. Minnesota prior)
   double log_a_prior = 0;
@@ -332,43 +352,56 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
     }
   }
 
-  //Prior on B
+  // Prior on B
   double log_b_prior = 0;
-  if(b_cov(0) != -1) {
 
-    //Construct B matrix
-    arma::mat B(m, m);
+  // Construct B matrix
+  arma::mat B(m, m);
 
-    //SVAR or VAR (recursive)
-    if((first_sgt - first_b) == (m * m)) {
-      for(int i = first_b; i != first_sgt; ++i) {
-        B(i - first_b) = state(i);
+  //SVAR or VAR (recursive)
+  if((first_sgt - first_b) == (m * m)) {
+    for(int i = first_b; i != first_sgt; ++i) {
+      B(i - first_b) = state(i);
+    }
+  } else {
+    int row = 0;
+    int col = 1;
+    int index = 0;
+    for(int i = first_b; i != first_sgt; ++i) {
+      row = row + 1;
+      if(row > m) {
+        row = 1;
+        col = col + 1;
       }
-    } else {
-      int row = 0;
-      int col = 1;
-      int index = 0;
-      for(int i = first_b; i != first_sgt; ++i) {
+      while(col > row) {
+        B(index) = 0;
+        index = index + 1;
         row = row + 1;
         if(row > m) {
           row = 1;
           col = col + 1;
         }
-        while(col > row) {
-          B(index) = 0;
-          index = index + 1;
-          row = row + 1;
-          if(row > m) {
-            row = 1;
-            col = col + 1;
-          }
-        }
-        B(index) = state(i);
-        index = index + 1;
+      }
+      B(index) = state(i);
+      index = index + 1;
+    }
+  }
+
+  // Permutation check if 'type == "svar"'
+  if((first_sgt - first_b) == (m * m)) {
+    if(B_inverse) {
+      if(!check_permutation(arma::inv(B))) {
+        return -arma::datum::inf;
+      }
+    } else {
+      if(!check_permutation(B)) {
+        return -arma::datum::inf;
       }
     }
+  }
 
-    //Evaluate log prior density at B
+  // Evaluate log prior density at B
+  if(b_cov(0) != -1) {
     log_b_prior = dmvnrm_arma(arma::vectorise(B), b_mean, b_cov);
   }
 
@@ -468,7 +501,8 @@ void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_ro
                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
                 p_prior_mode, p_prior_scale,
                 q_prior_mode, q_prior_scale,
-                r_prior_mode, r_prior_scale);
+                r_prior_mode, r_prior_scale,
+                B_inverse);
 
     //Accept or reject proposal
     double log_ratio = proposal_density - last_density;
@@ -623,7 +657,8 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
                 p_prior_mode, p_prior_scale,
                 q_prior_mode, q_prior_scale,
-                r_prior_mode, r_prior_scale);
+                r_prior_mode, r_prior_scale,
+                B_inverse);
     densities(last_row - j) = density;
   }
 
@@ -919,7 +954,8 @@ struct MlParallel : public RcppParallel::Worker {
                                  a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
                                  p_prior_mode, p_prior_scale,
                                  q_prior_mode, q_prior_scale,
-                                 r_prior_mode, r_prior_scale);
+                                 r_prior_mode, r_prior_scale,
+                                 B_inverse);
       double proposal_density = prop_ll + prop_lp;
       denumerator_log_vec(j) = log_alpha(proposal_density, logden_star);
     }
@@ -1006,7 +1042,8 @@ Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec poster
                                  a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
                                  p_prior_mode, p_prior_scale,
                                  q_prior_mode, q_prior_scale,
-                                 r_prior_mode, r_prior_scale);
+                                 r_prior_mode, r_prior_scale,
+                                 B_inverse);
 
       log_text("Main loop - Finishing...", j);
 
