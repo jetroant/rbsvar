@@ -430,10 +430,11 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   arma::vec log_pq_prior(m);
   for(int i = 0; i != m; ++i) {
     arma::vec sgt_param = vectorise(SGT.row(i));
-    if(sgt_param(1) < 0.01) return -arma::datum::inf;
-    if(sgt_param(1) > 3.99) return -arma::datum::inf;
+    arma::vec sgt_param_exp = arma::exp(sgt_param);
+    if(sgt_param_exp(1) < 0.01) return -arma::datum::inf;
+    if(sgt_param_exp(1) > 3.99) return -arma::datum::inf;
     log_pq_prior(i) =
-      arma::log_normpdf(exp(sgt_param(1)), p_prior_mode, p_prior_scale) +
+      arma::log_normpdf(sgt_param_exp(1), p_prior_mode, p_prior_scale) +
       arma::log_normpdf(sgt_param(2), q_prior_mode, q_prior_scale);
   }
 

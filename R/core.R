@@ -250,7 +250,7 @@ init_rbsvar <- function(y,
   # 3) Sgt-parameters
   SGT_param <- matrix(0, nrow = ncol(y), ncol = 3)
   colnames(SGT_param) <- c("lambda", "p", "q")
-  SGT_param[,"p"] <- p_prior[1]
+  SGT_param[,"p"] <- log(p_prior[1])
   SGT_param[,"q"] <- q_prior[1]
 
   if(is.null(init)) {
