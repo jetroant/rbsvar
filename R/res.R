@@ -633,7 +633,167 @@ forecast_rbsvar <- function(model,
 
 }
 
+sign_probabilities <- function(model,
+                               output,
+                               burn,
+                               signs,
+                               horizons,
+                               limit = 3.2,
+                               N = 10000,
+                               cumulate = c(),
+                               verbose = TRUE) {
 
+  if(model$prior$A$mean[1] == -1 | model$prior$B$mean[1] == -1) stop("Prior is improper. Proper prior needed.")
+  if(model$type != "svar") stop("model$type == 'svar' required.")
+
+  if(is.null(ncol(signs))) signs <- matrix(signs, ncol = 1)
+  if(!is.list(horizons)) horizons <- list(horizons)
+  if(length(horizons) != ncol(signs)) stop("'horizons' misspecified.")
+  if(nrow(signs) != ncol(model$y)) stop("'signs' misspecified.")
+
+  # Function specific helper functions
+  simulate_prior <- function(model, output, N = NA) {
+    if(is.null(model$prior$A) | is.null(model$prior$B)) stop("Proper prior needed.")
+    if(is.na(N)) N <- output$args$N * output$args$n
+    A_prior_cov <- model$prior$A$cov
+    if(ncol(A_prior_cov) == 1) A_prior_cov <- diag(c(A_prior_cov))
+    A_sample <- mvtnorm::rmvnorm(n = N, mean = model$prior$A$mean, sigma = A_prior_cov)
+    B_prior_cov <- model$prior$B$cov
+    if(ncol(B_prior_cov) == 1) B_prior_cov <- diag(c(B_prior_cov))
+    B_sample <- mvtnorm::rmvnorm(n = N, mean = model$prior$B$mean, sigma = B_prior_cov)
+    prior_sample <- cbind(A_sample, B_sample)
+    colnames(prior_sample) <- colnames(output$chains)[1:ncol(prior_sample)]
+    prior_sample
+  }
+  check_signs <- function(x, signs) {
+    if(sum(sign(x)[signs != 0] != signs[signs != 0]) == 0) {
+      1
+    } else {
+      0
+    }
+  }
+
+  # Compute posterior impulse responses
+  if(verbose) cat("Posterior: \n")
+  irf_obj <- irf(model = model,
+                 output = output,
+                 burn = burn,
+                 N = N,
+                 horizon = max(unlist(horizons)),
+                 cumulate = cumulate,
+                 verbose = verbose)
+  if(verbose) cat("------ \n")
+
+  # Simulate from the prior and compute prior impulse responses
+  if(verbose) cat("Prior: \n")
+  output_prior <- list()
+  output_prior$chains <- simulate_prior(model, output)
+  output_prior$args$m0 <- output$args$m0
+  output_prior$args$n <- output$args$n
+  irf_obj_prior <- irf(model = model,
+                       output = output_prior,
+                       burn = 0,
+                       N = N,
+                       horizon = max(unlist(horizons)),
+                       cumulate = cumulate,
+                       verbose = verbose)
+  if(verbose) cat("------ \n")
+
+  shock_permutations <- gtools::permutations(nrow(signs), ncol(signs))
+  sign_permutations <- gtools::permutations(2, ncol(signs), v = c(-1, 1), repeats.allowed = TRUE)
+
+  # Go through different permutations
+  if(verbose) cat(paste0("Going through: ", nrow(shock_permutations), " x ", nrow(sign_permutations),
+                         " = ", nrow(shock_permutations) * nrow(sign_permutations)," permutations... \n"))
+  significant_permutations <- list()
+  count <- 0
+  for(shock_perm_index in 1:nrow(shock_permutations)) {
+    shock_perm_now <- shock_permutations[shock_perm_index,]
+    for(sign_perm_index in 1:nrow(sign_permutations)) {
+      signs_perm_now <- sign_permutations[sign_perm_index,]
+
+      prob_mat_total <- matrix(NA, ncol = length(shock_perm_now), nrow = N)
+      prob_mat_total_prior <- matrix(NA, ncol = length(shock_perm_now), nrow = N)
+      for(shock_index in 1:length(shock_perm_now)) {
+
+        shock_now <- shock_perm_now[shock_index]
+        horizons_now <- horizons[[shock_index]]
+        signs_now <- signs[,shock_index] * signs_perm_now[shock_index]
+
+        # Posterior
+        irf_array <- irf_obj[[shock_now]]
+        prob_mat <- matrix(NA, ncol = length(horizons_now), nrow = N)
+        for(horizon_index in 1:ncol(prob_mat)) {
+          this_horizon <- horizons_now[horizon_index] + 1
+          irf_mat <- irf_array[,this_horizon,]
+          prob_mat[,horizon_index] <- apply(irf_mat, 2, check_signs, signs = signs_now)
+        }
+        prob_vec <- apply(prob_mat, 1, sum)
+        prob_vec <- ifelse(prob_vec == ncol(prob_mat), 1, 0)
+        prob_mat_total[,shock_index] <- prob_vec
+
+        # Prior
+        irf_array_prior <- irf_obj_prior[[shock_now]]
+        prob_mat_prior <- matrix(NA, ncol = length(horizons_now), nrow = N)
+        for(horizon_index in 1:ncol(prob_mat_prior)) {
+          this_horizon <- horizons_now[horizon_index] + 1
+          irf_mat_prior <- irf_array_prior[,this_horizon,]
+          prob_mat_prior[,horizon_index] <- apply(irf_mat_prior, 2, check_signs, signs = signs_now)
+        }
+        prob_vec_prior <- apply(prob_mat_prior, 1, sum)
+        prob_vec_prior <- ifelse(prob_vec_prior == ncol(prob_mat_prior), 1, 0)
+        prob_mat_total_prior[,shock_index] <- prob_vec_prior
+      }
+
+      prob_vec_total <- apply(prob_mat_total, 1, sum)
+      prob_vec_total <- ifelse(prob_vec_total == ncol(prob_mat_total), 1, 0)
+      prob_vec_total_prior <- apply(prob_mat_total_prior, 1, sum)
+      prob_vec_total_prior <- ifelse(prob_vec_total_prior == ncol(prob_mat_total_prior), 1, 0)
+
+      # Bayes factor
+      bayes_factor <- mean(prob_vec_total) / mean(prob_vec_total_prior)
+      if(bayes_factor > limit) {
+        count <- count + 1
+        significant_permutations[[count]] <- list("bayes_factor" = bayes_factor,
+                                                  "shocks" = shock_perm_now,
+                                                  "sign_flips" = signs_perm_now,
+                                                  "prob" = mean(prob_vec_total),
+                                                  "prob_prior" = mean(prob_vec_total_prior))
+      }
+    }
+  }
+
+  if(verbose) cat("DONE. \n")
+  if(verbose) cat("------ \n")
+
+  if(length(significant_permutations) == 0) {
+    if(verbose) cat(paste0("Sign restrictions not supported by the data, i.e. Bayes factor < ",
+                           limit, " for any permutation of the shocks. \n"))
+    return(NULL)
+  } else {
+    if(length(significant_permutations) == 1) {
+      if(verbose) cat(paste0("One permutation of the shocks supported by the the data, i.e. Bayes factor > ",
+                             limit, " for one permutation. \n"))
+    } else {
+      if(verbose) cat(paste0(length(significant_permutations), " permutations of the shocks potentially supported by the data, i.e. Bayes factor < ",
+                             limit, " for ", length(significant_permutations),  " permutations. \n"))
+    }
+  }
+
+  # Matrix of Bayes factors
+  bayes_factors <- diag(length(significant_permutations))
+  for(i in 1:length(significant_permutations)) {
+    for(j in 1:length(significant_permutations)) {
+      if(i == j) bayes_factors[i,j] <- significant_permutations[[i]]$bayes_factor
+      if(i != j) bayes_factors[i,j] <- significant_permutations[[i]]$prob / significant_permutations[[j]]$prob
+    }
+  }
+
+  ret <- list("permutations" = significant_permutations,
+              "bayes_factors" = bayes_factors,
+              "args" = list("signs" = signs, "horizons" = horizons, "limit" = limit))
+  ret
+}
 
 
 
