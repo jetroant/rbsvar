@@ -343,6 +343,7 @@ irf_plot <- function(irf_obj,
       col <- col + 1
     }
 
+    if(length(irf_obj) < row) next
     if(is.null(irf_obj[[row]])) next
 
     sub_irfs <- t(irf_obj[[row]][col,,])
