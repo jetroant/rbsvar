@@ -399,7 +399,7 @@ irf_plot <- function(irf_obj,
   }
 
   m <- length(irf_obj)
-  for(i in 1:length(irf_obj)) if(nrow(irf_obj[[i]]) > m) m <- nrow(irf_obj[[i]])
+  for(i in 1:length(irf_obj)) if(!is.null(nrow(irf_obj[[i]]))) m <- nrow(irf_obj[[i]])
   if(is.null(varnames)) varnames <- paste0("var", 1:m)
   if(is.null(mfrow)) mfrow <- c(m, m)
   par(mar = mar)
