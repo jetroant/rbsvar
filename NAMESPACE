@@ -1,4 +1,17 @@
+
 useDynLib(rbsvar, .registration=TRUE)
-exportPattern("^[[:alpha:]]+")
+
+export(convergence)
+export(est_rbsvar)
+export(eval_rbsvar)
+export(init_rbsvar)
+export(irf)
+export(irf_plot)
+export(marginal_likelihood)
+export(plot_chains)
+export(plot_densities)
+export(post_sample)
+export(sign_probabilities) 
+
 importFrom(Rcpp, evalCpp)
 importFrom(RcppParallel, RcppParallelLibs)

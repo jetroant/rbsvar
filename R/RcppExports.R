@@ -33,12 +33,8 @@ log_prior <- function(state, yy, xx, first_b, first_sgt, first_garch, first_yna,
     .Call(`_rbsvar_log_prior`, state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, B_inverse)
 }
 
-draw <- function(draws, densities, asums, state_row, last_row, gamma, K, n, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, yna_indices, B_inverse, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, mean_cent, var_adj, parallel_likelihood) {
-    invisible(.Call(`_rbsvar_draw`, draws, densities, asums, state_row, last_row, gamma, K, n, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, yna_indices, B_inverse, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, mean_cent, var_adj, parallel_likelihood))
-}
-
-sampler <- function(N, n, m0, K, gamma, init_draws, output_as_input, old_chain, new_chain, parallel, parallel_likelihood, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, progress_bar) {
-    .Call(`_rbsvar_sampler`, N, n, m0, K, gamma, init_draws, output_as_input, old_chain, new_chain, parallel, parallel_likelihood, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, progress_bar)
+sampler <- function(N, n, m0, K, gamma, init_draws, output_as_input, old_chain, new_chain, parallel, parallel_likelihood, model_R, progress_bar) {
+    .Call(`_rbsvar_sampler`, N, n, m0, K, gamma, init_draws, output_as_input, old_chain, new_chain, parallel, parallel_likelihood, model_R, progress_bar)
 }
 
 stackA_cpp <- function(A, constant = TRUE) {
@@ -57,7 +53,7 @@ logSumExp <- function(x) {
     .Call(`_rbsvar_logSumExp`, x)
 }
 
-log_ml_cpp <- function(proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel = FALSE, parallel_likelihood = FALSE) {
-    .Call(`_rbsvar_log_ml_cpp`, proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, yy, xx, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, first_b, first_sgt, first_garch, first_yna, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, parallel, parallel_likelihood)
+log_ml_cpp <- function(proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, parallel, parallel_likelihood, model_R) {
+    .Call(`_rbsvar_log_ml_cpp`, proposal_densities, posterior_densities, theta_star, sigma_star, logden_star, J, parallel, parallel_likelihood, model_R)
 }
 

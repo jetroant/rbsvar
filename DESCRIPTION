@@ -1,13 +1,13 @@
 Package: rbsvar
 Type: Package
-Title: What the Package Does in One 'Title Case' Line
-Version: 1.0
-Date: 2020-10-12
-Author: Your Name
-Maintainer: Your Name <your@email.com>
-Description: One paragraph description of what the package does as one or more
-         full sentences.
+Title: Bayesian estimation of statistically identified robust structural vectorautoregressive models
+Version: 0.1
+Date: 2021-05-24
+Authors@R: person("Jetro", "Anttonen", email = "jetro.a@gmail.com",
+                  role = c("aut", "cre"))
+Description: Bayesian estimation of statistically identified robust structural vectorautoregressive models...
 License: GPL (>= 2)
 Imports: Rcpp (>= 1.0.5), RcppParallel (>= 5.0.2), RcppArmadillo, RcppDist, sgt, fanplot, expm, mvtnorm, gtools
 LinkingTo: Rcpp, RcppParallel, RcppArmadillo, RcppDist
 SystemRequirements: GNU make
+RoxygenNote: 7.1.1

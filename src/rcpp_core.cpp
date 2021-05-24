@@ -6,6 +6,10 @@
 #include <mvt.h>
 #include <4beta.h>
 
+  //////////////////////
+ // SGT-distribution //
+//////////////////////
+
 // [[Rcpp::export]]
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
   double m = 0;
@@ -39,6 +43,9 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
     );
   return ret;
 }
+  //////////////////////////////////////
+ // Multivariate normal distribution //
+//////////////////////////////////////
 
 // The slower but more general multinormal implementation below is a modification of: https://gallery.rcpp.org/articles/dmvnorm_arma/
 static double const log2pi = std::log(2.0 * M_PI);
@@ -95,7 +102,10 @@ double dmvnrm_arma_diagonal(arma::vec const &x,
   }
   return exp(out);
 }
-// Multinormal implementation ends.
+
+  /////////////////////////////////////
+ // Likelihood function and friends //
+/////////////////////////////////////
 
 struct LikelihoodParallel : public RcppParallel::Worker {
 
@@ -171,7 +181,7 @@ Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
 // [[Rcpp::export]]
 double log_like(arma::vec state, arma::mat yy, arma::mat xx,
                 const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
+                const int m, const int A_rows, const int t, const arma::ivec yna_indices, const bool B_inverse,
                 const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
 
   //Construct A matrix
@@ -303,6 +313,10 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
   if(std::isnan(ret)) return -arma::datum::inf;
   return ret;
 }
+
+  ///////////
+ // Prior //
+///////////
 
 // [[Rcpp::export]]
 bool check_permutation(arma::mat B) {
@@ -453,18 +467,88 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   return ret;
 }
 
-// [[Rcpp::export]]
+  ///////////////
+ // Posterior //
+///////////////
+
+struct Model {
+
+  // Likelihood arguments
+  arma::mat yy;
+  arma::mat xx;
+  int first_b;
+  int first_sgt;
+  int first_garch;
+  int first_yna;
+  int m;
+  int A_rows;
+  int t;
+  arma::ivec yna_indices;
+  bool mean_cent;
+  bool var_adj;
+  bool B_inverse;
+
+  // Prior arguments
+  arma::vec a_mean;
+  arma::mat a_cov;
+  bool prior_A_diagonal;
+  arma::vec b_mean;
+  arma::mat b_cov;
+  arma::vec p_prior;
+  arma::vec q_prior;
+  arma::vec r_prior;
+
+  void init(Rcpp::List model_R) {
+    arma::mat yy_ = model_R["yy"]; yy = yy_;
+    arma::mat xx_ = model_R["xx"]; xx = xx_;
+    int first_b_ = model_R["first_b"]; first_b = first_b_;
+    int first_sgt_ = model_R["first_sgt"]; first_sgt = first_sgt_;
+    int first_garch_ = model_R["first_garch"]; first_garch = first_garch_;
+    int first_yna_ = model_R["first_yna"]; first_yna = first_yna_;
+    int m_ = model_R["m"]; m = m_;
+    int A_rows_ = model_R["A_rows"]; A_rows = A_rows_;
+    int t_ = model_R["t"]; t = t_;
+    arma::ivec yna_indices_ = model_R["yna_indices"]; yna_indices = yna_indices_;
+    bool mean_cent_ = model_R["mean_cent"]; mean_cent = mean_cent_;
+    bool var_adj_ = model_R["var_adj"]; var_adj = var_adj_;
+    bool B_inverse_ = model_R["B_inverse"]; B_inverse = B_inverse_;
+
+    arma::vec a_mean_ = model_R["a_mean"]; a_mean = a_mean_;
+    arma::mat a_cov_ = model_R["a_cov"]; a_cov = a_cov_;
+    bool prior_A_diagonal_ = model_R["prior_A_diagonal"]; prior_A_diagonal = prior_A_diagonal_;
+    arma::vec b_mean_ = model_R["b_mean"]; b_mean = b_mean_;
+    arma::mat b_cov_ = model_R["b_cov"]; b_cov = b_cov_;
+    arma::vec p_prior_ = model_R["p_prior"]; p_prior = p_prior_;
+    arma::vec q_prior_ = model_R["q_prior"]; q_prior = q_prior_;
+    arma::vec r_prior_ = model_R["r_prior"]; r_prior = r_prior_;
+  }
+};
+
+double log_posterior(const arma::vec par, const Model M, const bool parallel_likelihood) {
+
+  double ll = log_like(par, M.yy, M.xx,
+                       M.first_b, M.first_sgt, M.first_garch, M.first_yna,
+                       M.m, M.A_rows, M.t,
+                       M.yna_indices, M.B_inverse,
+                       M.mean_cent, M.var_adj, parallel_likelihood);
+  double lp = log_prior(par, M.yy, M.xx,
+                        M.first_b, M.first_sgt, M.first_garch, M.first_yna,
+                        M.m, M.A_rows, M.t,
+                        M.a_mean, M.a_cov, M.prior_A_diagonal, M.b_mean, M.b_cov,
+                        M.p_prior(0), M.p_prior(1),
+                        M.q_prior(0), M.q_prior(1),
+                        M.r_prior(0), M.r_prior(1),
+                        M.B_inverse);
+  return ll + lp;
+}
+
+  ///////////////////////////////
+ // DE-MC sampler and friends //
+///////////////////////////////
+
 void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_row, int last_row,
-          const double gamma, const int K, const int n,
-          const arma::mat& yy, const arma::mat& xx,
-          const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-          const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
-          const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
-          const arma::vec b_mean, const arma::mat b_cov,
-          const double p_prior_mode, const double p_prior_scale,
-          const double q_prior_mode, const double q_prior_scale,
-          const double r_prior_mode, const double r_prior_scale,
-          const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
+          const double gamma, const int K, const int n, const bool parallel_likelihood,
+          Model M) {
 
   //Initialize the state with current state of the chain
   arma::vec state = vectorise(draws.row(state_row));
@@ -493,19 +577,7 @@ void draw(arma::mat& draws, arma::vec& densities, arma::vec& asums, int state_ro
     arma::vec proposal = state + gamma * (r1 - r2);
 
     //Compute proposal density
-    proposal_density =
-      log_like(proposal, yy, xx,
-               first_b, first_sgt, first_garch, first_yna,
-               m, A_rows, t, yna_indices, B_inverse,
-               mean_cent, var_adj, parallel_likelihood) +
-      log_prior(proposal, yy, xx,
-                first_b, first_sgt, first_garch, first_yna,
-                m, A_rows, t,
-                a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                p_prior_mode, p_prior_scale,
-                q_prior_mode, q_prior_scale,
-                r_prior_mode, r_prior_scale,
-                B_inverse);
+    proposal_density = log_posterior(proposal, M, parallel_likelihood);
 
     //Accept or reject proposal
     double log_ratio = proposal_density - last_density;
@@ -539,83 +611,40 @@ struct DrawParallel : public RcppParallel::Worker {
   arma::mat& draws;
   arma::vec& densities;
   arma::vec& asums;
-  const arma::mat& yy;
-  const arma::mat& xx;
-  const int first_b;
-  const int first_sgt;
-  const int first_garch;
-  const int first_yna;
-  const bool mean_cent;
-  const bool var_adj;
-  const arma::vec a_mean;
-  const arma::mat a_cov;
-  const bool prior_A_diagonal;
-  const arma::vec b_mean;
-  const arma::mat b_cov;
-  const arma::vec yna_indices;
-  const bool B_inverse;
-  const RcppParallel::RVector<double> par_vec;
+  const double gamma;
+  const int K;
+  const int n;
+  const bool parallel_likelihood;
+  const Model M;
 
-  DrawParallel(arma::mat& draws, arma::vec& densities, arma::vec& asums, const arma::mat& yy, const arma::mat& xx,
-               const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-               const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov,
-               Rcpp::NumericVector par_vec, const arma::vec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj)
-    : draws(draws), densities(densities), asums(asums), yy(yy), xx(xx),
-      first_b(first_b), first_sgt(first_sgt), first_garch(first_garch), first_yna(first_yna),
-      a_mean(a_mean), a_cov(a_cov), prior_A_diagonal(prior_A_diagonal), b_mean(b_mean), b_cov(b_cov),
-      par_vec(par_vec), yna_indices(yna_indices), B_inverse(B_inverse), mean_cent(mean_cent), var_adj(var_adj) {}
+  DrawParallel(arma::mat& draws, arma::vec& densities, arma::vec& asums,
+               const double gamma, const int K, const int n, const bool parallel_likelihood, const Model M)
+    : draws(draws), densities(densities), asums(asums),
+      gamma(gamma), K(K), n(n), parallel_likelihood(parallel_likelihood), M(M) {}
 
   void operator()(std::size_t begin, std::size_t end) {
     for(int j = begin; j != end; ++j) {
-      draw(draws, densities, asums, j, j - par_vec[1],
-           par_vec[4], par_vec[3], par_vec[1], yy, xx,
-           first_b, first_sgt, first_garch, first_yna,
-           par_vec[5], par_vec[6], par_vec[7], yna_indices, B_inverse,
-           a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-           par_vec[8], par_vec[9], par_vec[10], par_vec[11], par_vec[12], par_vec[13],
-           mean_cent, var_adj, par_vec[14]);
+      draw(draws, densities, asums, j, j - n,
+           gamma, K, n, parallel_likelihood,
+           M);
     }
   }
 };
 
 // [[Rcpp::export]]
-Rcpp::List sampler(const int N, const int n, const int m0, const int K, const double gamma,
-                   const arma::mat init_draws,
+Rcpp::List sampler(const int N, const int n, const int m0, const int K, const double gamma, const arma::mat init_draws,
                    const bool output_as_input, const arma::mat old_chain, const bool new_chain,
                    const bool parallel, const bool parallel_likelihood,
-                   const arma::mat yy, const arma::mat xx,
-                   const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
-                   const bool mean_cent, const bool var_adj,
-                   const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                   const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
-                   const arma::vec b_mean, const arma::mat b_cov,
-                   const double p_prior_mode, const double p_prior_scale,
-                   const double q_prior_mode, const double q_prior_scale,
-                   const double r_prior_mode, const double r_prior_scale,
-                   const bool progress_bar) {
+                   const Rcpp::List model_R, const bool progress_bar) {
 
-  // Collect parameters
-  Rcpp::NumericVector par_vec(12);
-  par_vec[0] = N;
-  par_vec[1] = n;
-  par_vec[2] = m0;
-  par_vec[3] = K;
-  par_vec[4] = gamma;
-  par_vec[5] = m;
-  par_vec[6] = A_rows;
-  par_vec[7] = t;
-  par_vec[8] = p_prior_mode;
-  par_vec[9] = p_prior_scale;
-  par_vec[10] = q_prior_mode;
-  par_vec[11] = q_prior_scale;
-  par_vec[12] = r_prior_mode;
-  par_vec[13] = r_prior_scale;
-  par_vec[14] = parallel_likelihood;
+  // Initialize the model object
+  Model M;
+  M.init(model_R);
 
-  //Initialize the chains
+  // Initialize the chains
   arma::mat draws(N * n + m0, init_draws.n_cols);
 
-  //Initial chains/draws from multivariate normal...
+  // Initial chains/draws from multivariate normal...
   if(!output_as_input) {
     for(int i = 0; i != m0; ++i) {
       draws.row(i) = init_draws.row(i);
@@ -624,7 +653,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
   //...or from an existing sample
   } else {
 
-    //Draw random rows from an existing sample to initialize new chains...
+    // Draw random rows from an existing sample to initialize new chains...
     if(new_chain) {
       for(int i = 0; i != m0; ++i) {
         double rnd_double = arma::randu() * old_chain.n_rows;
@@ -640,47 +669,35 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
     }
   }
 
-  //Initialize the loop variables
+  // Initialize the loop variables
   arma::vec densities(N * n + m0);
   arma::vec asums(N * n + m0);
   int last_row = m0 - 1;
   if(new_chain == false && output_as_input == true) last_row = old_chain.n_rows - 1;
 
-  //Initial densities
+  // Initial densities
   for(int j = 0; j != n; ++j) {
     arma::vec state = vectorise(draws.row(last_row - j));
-    double density =
-      log_like(state, yy, xx,
-               first_b, first_sgt, first_garch, first_yna,
-               m, A_rows, t, yna_indices, B_inverse,
-               mean_cent, var_adj, parallel_likelihood) +
-      log_prior(state, yy, xx,
-                first_b, first_sgt, first_garch, first_yna,
-                m, A_rows, t,
-                a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                p_prior_mode, p_prior_scale,
-                q_prior_mode, q_prior_scale,
-                r_prior_mode, r_prior_scale,
-                B_inverse);
+    double density = log_posterior(state, M, parallel_likelihood);
     densities(last_row - j) = density;
   }
 
-  //Progress bar variables
+  // Progress bar variables (Should be corrected)
   double progress = 0.0;
   int bar_width = 70;
   int update_every = N/100;
 
-  //Sequential
+  // Sequential implementation:
   if(parallel == false) {
     for(int i = 0; i != N; ++i) {
 
-      //If an existing sample is continued we skip iterations already carried
+      // If an existing sample is continued we skip iterations already carried
       if(i == 0 && output_as_input == true && new_chain == false) {
         i = (old_chain.n_rows - m0)/n;
         progress += double(i)/double(N);
       }
 
-      //Update progress bar
+      // Update progress bar
       if(i % update_every == 0) {
         if(progress_bar) {
           progress += 0.01;
@@ -696,27 +713,20 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
         }
       }
 
-      //Update states of the chains
+      // Update states of the chains
       for(int j = 0; j != n; ++j) {
         int state_row = last_row - j;
         draw(draws, densities, asums, state_row, last_row,
-             gamma, K, n, yy, xx,
-             first_b, first_sgt, first_garch, first_yna,
-             m, A_rows, t, yna_indices, B_inverse,
-             a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-             p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale,
-             mean_cent, var_adj, parallel_likelihood);
+             gamma, K, n, parallel_likelihood, M);
       }
       last_row = last_row + n;
     }
   }
 
-  //Parallel
+  // Parallel implementation:
   if(parallel == true) {
     DrawParallel Wrkr(draws, densities, asums,
-                      yy, xx, first_b, first_sgt, first_garch, first_yna,
-                      a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                      par_vec, yna_indices, B_inverse, mean_cent, var_adj);
+                      gamma, K, n, parallel_likelihood, M);
     for(int i = 0; i != N; ++i) {
 
       //If an existing sample is continued we skip iterations already carried
@@ -725,7 +735,7 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
         progress += double(i)/double(N);
       }
 
-      //Update progress bar
+      // Update progress bar
       if(i % update_every == 0) {
         if(progress_bar) {
           progress += 0.01;
@@ -741,20 +751,24 @@ Rcpp::List sampler(const int N, const int n, const int m0, const int K, const do
         }
       }
 
-      //Update states of the chains
+      // Update states of the chains
       parallelFor(last_row - n + 1, last_row + 1, Wrkr);
       last_row = last_row + n;
     }
   }
   if(progress_bar) Rcpp::Rcout << std::endl;
 
-  //Return what is needed to be returned
+  // Return what needs to be returned
   Rcpp::List ret_list(3);
   ret_list[0] = draws;
   ret_list[1] = densities;
   ret_list[2] = asums;
   return ret_list;
 }
+
+  /////////////////////
+ // IRF and friends // (Not ready...)
+/////////////////////
 
 // [[Rcpp::export]]
 arma::mat stackA_cpp(arma::mat A, const bool constant = true) {
@@ -871,7 +885,9 @@ Rcpp::List irf_cpp(const arma::mat s, const int horizon, const arma::vec cumulat
   return(ret);
 }
 
-// Marginal likelihood:
+  /////////////////////////
+ // Marginal likelihood //
+/////////////////////////
 
 double log_alpha(const double numerator_density, const double denumerator_density) {
   double ret = numerator_density - denumerator_density;
@@ -897,69 +913,20 @@ struct MlParallel : public RcppParallel::Worker {
   // Inputs
   arma::mat& proposal_mat;
   const double logden_star;
-
-  const arma::mat& yy;
-  const arma::mat& xx;
-  const int first_b;
-  const int first_sgt;
-  const int first_garch;
-  const int first_yna;
-  const int m;
-  const int A_rows;
-  const int t;
-  const arma::vec yna_indices;
-  const bool B_inverse;
-  const bool mean_cent;
-  const bool var_adj;
   const bool parallel_likelihood;
-
-  const arma::vec a_mean;
-  const arma::mat a_cov;
-  const bool prior_A_diagonal;
-  const arma::vec b_mean;
-  const arma::mat b_cov;
-  const double p_prior_mode;
-  const double p_prior_scale;
-  const double q_prior_mode;
-  const double q_prior_scale;
-  const double r_prior_mode;
-  const double r_prior_scale;
+  const Model M;
 
   // Constructor
   MlParallel(arma::vec& denumerator_log_vec, arma::mat& proposal_mat, const double logden_star,
-             const arma::mat& yy, const arma::mat& xx,
-             const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-             const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
-             const bool mean_cent, const bool var_adj, const bool parallel_likelihood,
-             const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov,
-             const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale,
-             const double r_prior_mode, const double r_prior_scale)
+             const bool parallel_likelihood, const Model M)
     : denumerator_log_vec(denumerator_log_vec), proposal_mat(proposal_mat), logden_star(logden_star),
-      yy(yy), xx(xx),
-      first_b(first_b), first_sgt(first_sgt), first_garch(first_garch), first_yna(first_yna),
-      m(m), A_rows(A_rows), t(t), yna_indices(yna_indices), B_inverse(B_inverse),
-      mean_cent(mean_cent), var_adj(var_adj), parallel_likelihood(parallel_likelihood),
-      a_mean(a_mean), a_cov(a_cov), prior_A_diagonal(prior_A_diagonal), b_mean(b_mean), b_cov(b_cov),
-      p_prior_mode(p_prior_mode), p_prior_scale(p_prior_scale), q_prior_mode(q_prior_mode), q_prior_scale(q_prior_scale),
-      r_prior_mode(r_prior_mode), r_prior_scale(r_prior_scale) {}
+      parallel_likelihood(parallel_likelihood), M(M) {}
 
   //  Instructions
   void operator()(std::size_t begin, std::size_t end) {
     for(int j = begin; j != end; ++j) {
       arma::vec proposal = proposal_mat.row(j).t();
-      double prop_ll = log_like(proposal, yy, xx,
-                                first_b, first_sgt, first_garch, first_yna,
-                                m, A_rows, t, yna_indices, B_inverse,
-                                mean_cent, var_adj, parallel_likelihood);
-      double prop_lp = log_prior(proposal, yy, xx,
-                                 first_b, first_sgt, first_garch, first_yna,
-                                 m, A_rows, t,
-                                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                                 p_prior_mode, p_prior_scale,
-                                 q_prior_mode, q_prior_scale,
-                                 r_prior_mode, r_prior_scale,
-                                 B_inverse);
-      double proposal_density = prop_ll + prop_lp;
+      double proposal_density = log_posterior(proposal, M, parallel_likelihood);
       denumerator_log_vec(j) = log_alpha(proposal_density, logden_star);
     }
   }
@@ -985,17 +952,12 @@ double logSumExp(arma::vec x) {
 // [[Rcpp::export]]
 Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec posterior_densities,
                       const arma::vec theta_star, const arma::mat sigma_star, const double logden_star,
-                      const arma::uword J,
-                      const arma::mat& yy, const arma::mat& xx,
-                      const int m, const int A_rows, const int t, const arma::vec yna_indices, const bool B_inverse,
-                      const bool mean_cent, const bool var_adj,
-                      const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                      const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
-                      const arma::vec b_mean, const arma::mat b_cov,
-                      const double p_prior_mode, const double p_prior_scale,
-                      const double q_prior_mode, const double q_prior_scale,
-                      const double r_prior_mode, const double r_prior_scale,
-                      const bool parallel = false, const bool parallel_likelihood = false) {
+                      const arma::uword J, const bool parallel, const bool parallel_likelihood,
+                      const Rcpp::List model_R) {
+
+  // Initialize the model object
+  Model M;
+  M.init(model_R);
 
   log_text("log_ml_cpp starts", 0);
 
@@ -1030,28 +992,10 @@ Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec poster
       log_text("Main loop - Drawing proposal...", j);
       arma::vec proposal = proposal_mat.row(j).t();
 
-      log_text("Main loop - Computing likelihood...", j);
-
-      double prop_ll = log_like(proposal, yy, xx,
-                                first_b, first_sgt, first_garch, first_yna,
-                                m, A_rows, t, yna_indices, B_inverse,
-                                mean_cent, var_adj, parallel_likelihood);
-
-      log_text("Main loop - Computing prior...", j);
-
-      double prop_lp = log_prior(proposal, yy, xx,
-                                 first_b, first_sgt, first_garch, first_yna,
-                                 m, A_rows, t,
-                                 a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                                 p_prior_mode, p_prior_scale,
-                                 q_prior_mode, q_prior_scale,
-                                 r_prior_mode, r_prior_scale,
-                                 B_inverse);
+      log_text("Main loop - Computing posterior density...", j);
+      double proposal_density = log_posterior(proposal, M, parallel_likelihood);
 
       log_text("Main loop - Finishing...", j);
-
-      double proposal_density = prop_ll + prop_lp;
-
       denumerator_log_vec(j) = log_alpha(proposal_density, logden_star);
     }
   }
@@ -1061,14 +1005,7 @@ Rcpp::List log_ml_cpp(const arma::vec proposal_densities, const arma::vec poster
   // Parallel
   if(parallel== true) {
     MlParallel Wrkr(denumerator_log_vec, proposal_mat, logden_star,
-                    yy, xx,
-                    first_b, first_sgt, first_garch, first_yna,
-                    m, A_rows, t, yna_indices, B_inverse,
-                    mean_cent, var_adj, parallel_likelihood,
-                    a_mean, a_cov, prior_A_diagonal, b_mean, b_cov,
-                    p_prior_mode, p_prior_scale,
-                    q_prior_mode, q_prior_scale,
-                    r_prior_mode, r_prior_scale);
+                    parallel_likelihood, M);
     parallelFor(0, denumerator_log_vec.size(), Wrkr);
   }
 

@@ -1,5 +1,5 @@
 
-#Finds optimal initial values NO EXPORT
+#Finds optimal initial values, helper for 'init_rbsvar()' - NO EXPORT
 init_optim <- function(pre_init,
                        type,
                        B_inverse,
@@ -19,21 +19,21 @@ init_optim <- function(pre_init,
 
   obj_full <- function(state) {
     ret <- -(
-      rbsvar:::log_like(state, xy$yy, xy$xx,
-                        cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                        cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
-                        cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
-        rbsvar:::log_prior(state, xy$yy, xy$xx,
-                           cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                           cpp_args$m, cpp_args$A_rows, cpp_args$t,
-                           prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                           prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
+      log_like(state, xy$yy, xy$xx,
+               cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
+               cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
+        log_prior(state, xy$yy, xy$xx,
+                  cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
+                  cpp_args$m, cpp_args$A_rows, cpp_args$t,
+                  prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
+                  prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
     )
     if(ret == Inf) ret <- -min_density
     ret
   }
 
-  #Number of cores used is restricted if 'max_cores' is not NA
+  # Number of cores used is restricted if 'max_cores' is not NA
   if(maxit > 0) {
     if(verbose == TRUE) cat("Searching for optimal initial parameters values...\n")
     if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
@@ -49,8 +49,8 @@ init_optim <- function(pre_init,
     skip_hessian <- TRUE
   }
 
-  #Approximate the scale matrix based on numerically approximated Hessian
-  #and collect the results
+  # Approximate the scale matrix based on numerically approximated Hessian
+  # and collect the results
   if(!skip_hessian) {
     init_scale <- tryCatch({
       if(min(eigen(opt_full$hessian)$values) < 0) {
@@ -105,14 +105,43 @@ init_optim <- function(pre_init,
     init_scale[b_indices, b_indices] <- init_b_cov
   }
 
-  #Collect and return the initial parameter values and the scale matrix
+  # Collect and return the initial parameter values and the scale matrix
   init <- list("init_mode" = opt_full$par,
                "init_scale" = init_scale,
                "opt" = opt_full)
   init
 }
 
-#Initializes rbsvar model
+#' Initializes rbsvar model (Documentation incomplete)
+#'
+#' @param y The data.
+#' @param lags ...
+#' @param constant ...
+#' @param type ...
+#' @param garch ...
+#' @param mean_cent ...
+#' @param var_adj ...
+#' @param p_prior ...
+#' @param q_prior ...
+#' @param r_prior ...
+#' @param B_prior ...
+#' @param B_inverse ...
+#' @param shrinkage ...
+#' @param minnesota_means ...
+#' @param prior ...
+#' @param init ...
+#' @param maxit ...
+#' @param method ...
+#' @param skip_hessian ...
+#' @param trace ...
+#' @param REPORT ...
+#' @param min_density ...
+#' @param parallel_likelihood ...
+#' @param max_cores ...
+#' @param verbose ...
+#' @return A list that may be passed for example to \code{est_rbsvar()} or \code{eval_rbsvar()}.
+#'
+#' @export
 init_rbsvar <- function(y,
                         lags = 1,
                         constant = TRUE,
@@ -149,7 +178,7 @@ init_rbsvar <- function(y,
     if(verbose == TRUE) cat("As 'lags = 0', 'shrinkage' parameter is omitted. \n")
   }
 
-  ### Missing values in data ###
+  # Missing values in data: (Only type = "var" allowed)
 
   if(sum(is.na(yy)) != 0) {
     if(type == "svar") stop("'type = svar' only supports balanced data for now (no missing values in 'y').")
@@ -171,7 +200,7 @@ init_rbsvar <- function(y,
     yna_init <- c()
   }
 
-  ### Prior ###
+  # Prior:
 
   prior$p <- p_prior
   prior$q <- q_prior
@@ -188,7 +217,7 @@ init_rbsvar <- function(y,
   if(is.null(prior$B)) prior$B <- list("mean" = matrix(-1), "cov" = matrix(-1))
   if(is.null(prior$A)) prior$A <- list("mean" = matrix(-1), "cov" = matrix(-1))
 
-  ### Initial values and Minnesota-prior ###
+  # Initial values and Minnesota-prior:
 
   # A and Minnesota-prior
   if(!is.null(xx)) {
@@ -247,7 +276,7 @@ init_rbsvar <- function(y,
     if(B_inverse) b_init <- c(Binv_init)[which(!upper.tri(B_init))] else b_init <- c(B_init)[which(!upper.tri(B_init))]
   }
 
-  # 3) Sgt-parameters
+  # Sgt-parameters
   SGT_param <- matrix(0, nrow = ncol(y), ncol = 3)
   colnames(SGT_param) <- c("lambda", "p", "q")
   SGT_param[,"p"] <- log(p_prior[1])
@@ -274,7 +303,7 @@ init_rbsvar <- function(y,
     }
   }
 
-  # 4) Garch-parameters
+  # Garch-parameters
   if(garch == TRUE) {
     GARCH_param <- matrix(0, nrow = m, ncol = 3)
     colnames(GARCH_param) <- c("gamma_0", "gamma_1", "r")
@@ -290,7 +319,7 @@ init_rbsvar <- function(y,
     }
   }
 
-  # Check the feasibility of the initial values (p, q and r) (THIS IS IN WRONG PLACE)
+  # Check the feasibility of the initial values (p, q and r)
   count <- 0
   if(var_adj == FALSE) {
     for(i in 1:m) {
@@ -354,7 +383,7 @@ init_rbsvar <- function(y,
     prior_A_diagonal <- FALSE
   }
 
-  #Parameters required by cpp functions
+  # Parameters required by cpp functions
   cpp_args <- list("m" = ncol(xy$yy),
                    "first_b" = length(pre_init) - length(b_init) - length(sgt_init) - length(garch_init) - length(yna_init),
                    "first_sgt" = length(pre_init) - length(sgt_init) - length(garch_init) - length(yna_init),
@@ -369,24 +398,23 @@ init_rbsvar <- function(y,
                    "var_adj" = var_adj)
   if(lags == 0) cpp_args$A_rows <- 0
 
-  ### Optimal initial values ###
-
-  init <- rbsvar:::init_optim(pre_init = pre_init,
-                              type = type,
-                              B_inverse = B_inverse,
-                              xy = xy,
-                              prior = prior,
-                              ols_cov = ols_cov,
-                              cpp_args = cpp_args,
-                              method = method,
-                              skip_hessian = skip_hessian,
-                              min_density = min_density,
-                              parallel_likelihood = parallel_likelihood,
-                              max_cores = max_cores,
-                              maxit = maxit,
-                              trace = trace,
-                              REPORT = REPORT,
-                              verbose = verbose)
+  # Optimal initial values
+  init <- init_optim(pre_init = pre_init,
+                     type = type,
+                     B_inverse = B_inverse,
+                     xy = xy,
+                     prior = prior,
+                     ols_cov = ols_cov,
+                     cpp_args = cpp_args,
+                     method = method,
+                     skip_hessian = skip_hessian,
+                     min_density = min_density,
+                     parallel_likelihood = parallel_likelihood,
+                     max_cores = max_cores,
+                     maxit = maxit,
+                     trace = trace,
+                     REPORT = REPORT,
+                     verbose = verbose)
 
   if(verbose == TRUE) cat(paste0("DONE. Robust bayesian ", type, " model initialized.\n"))
   model <- list("y" = y,
@@ -402,7 +430,24 @@ init_rbsvar <- function(y,
   model
 }
 
-#Estimates rbsvar model
+#' Estimates rbsvar model by sampling from the posterior using DE-MC algorithm (Documentation incomplete)
+#'
+#' @param model A list outputted by \code{init_rbsvar()}.
+#' @param N ...
+#' @param n ...
+#' @param K ...
+#' @param m0 ...
+#' @param rel_gamma ...
+#' @param output ...
+#' @param new_chain ...
+#' @param parallel_chains ...
+#' @param parallel_likelihood ...
+#' @param max_cores ...
+#' @param progress_bar ...
+#' @param verbose ...
+#' @return A list that containing (among other things) the chain(s) sampled from the posterior. May be passed for example to \code{irf()}.
+#'
+#' @export
 est_rbsvar <- function(model,
                        N,
                        n = 2,
@@ -422,7 +467,7 @@ est_rbsvar <- function(model,
   gamma <- (2.38/sqrt(2*d)) * rel_gamma
   if(is.na(m0)) m0 <- n*d
 
-  ### Informational messages
+  # Informational messages
   if(verbose == TRUE) cat("Running differential evolution Markov chains... \n")
   if(verbose == TRUE) cat(paste0("N = ", N, "\n"))
   if(verbose == TRUE) cat(paste0("pop. size (n) = ", n,"\n"))
@@ -430,7 +475,7 @@ est_rbsvar <- function(model,
   if(verbose == TRUE) cat(paste0("K = ", K, "\n"))
   if(verbose == TRUE) cat(paste0("m0 = ", m0, "\n"))
 
-  ### Check whether old output is provided as an input and act accordingly
+  # Check whether old output is provided as an input and act accordingly
   if(!is.null(output)) {
     if(new_chain == TRUE) {
       if(is.null(output$burn)) stop("If 'new_chain = TRUE' then 'output$burn' argument must exist.")
@@ -450,28 +495,19 @@ est_rbsvar <- function(model,
     init_draws <- matrix(-1, ncol = length(model$init$init_mode))
   }
 
-  ### Max number of threads used
+  # Max number of threads used
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
 
-  ### Sampler runs here
-  sampler_out <- rbsvar:::sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
+  # Sampler runs here
+  model_R <- build_model_R(model)
+  sampler_out <- sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
                                   init_draws = init_draws,
                                   output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
                                   parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
-                                  yy = model$xy$yy, xx = model$xy$xx,
-                                  m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                                  yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
-                                  mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                                  first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                                  a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                                  b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                                  p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                                  q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                                  r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                                  progress_bar = progress_bar)
+                                  model_R = model_R, progress_bar = progress_bar)
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
 
-  ### Clean up the output
+  # Clean up the output
   names(sampler_out) <- c("draws", "densities", "asums")
   sampler_out$densities[1:(m0 - n)] <- NA
   sampler_out$asums[1:m0] <- NA
@@ -480,11 +516,11 @@ est_rbsvar <- function(model,
     sampler_out$asums[1:nrow(old_chain)] <- output$asums
   }
 
-  ### Average acceptance rate
+  # Average acceptance rate
   arate <- mean(na.omit(sampler_out$asums)/K)
   if(verbose == TRUE) cat(paste0("Average acceptance rate: ", round(arate, 3), "\n"))
 
-  ### Name the variables
+  # Name the variables
   if(model$lags > 0) {
     colnames(sampler_out$draws) <- c(paste0("a", 1:model$cpp_args$first_b),
                                      paste0("b", (model$cpp_args$first_b + 1):model$cpp_args$first_sgt - model$cpp_args$first_b),
@@ -509,7 +545,7 @@ est_rbsvar <- function(model,
   note <- ""
   if(output_as_input == TRUE & new_chain == FALSE) note <- paste0("New N = ", (N - output$args$N))
 
-  #Collect and return everything
+  # Collect and return everything
   ret <- list("chains" = sampler_out$draws,
               "densities" = sampler_out$densities,
               "asums" = sampler_out$asums,
@@ -522,19 +558,30 @@ est_rbsvar <- function(model,
   ret
 }
 
-#c++ wrapper for evaluating the posterior density
-eval_rbsvar <- function(model, par = NULL, parallel_likelihood = FALSE, max_cores = NA) {
+#' C++ wrapper for evaluating the posterior density (Documentation incomplete)
+#'
+#' @param model A list outputted by \code{init_rbsvar()}.
+#' @param par ...
+#' @param parallel_likelihood ...
+#' @param max_cores ...
+#' @return Proportional posterior density at the given point.
+#'
+#' @export
+eval_rbsvar <- function(model,
+                        par = NULL,
+                        parallel_likelihood = FALSE,
+                        max_cores = NA) {
   if(is.null(par)) par <- model$init$init_mode
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = max_cores)
   xy <- model$xy
   cpp_args <- model$cpp_args
   prior <- model$prior
   ret <- (
-    rbsvar:::log_like(par, xy$yy, xy$xx,
+    log_like(par, xy$yy, xy$xx,
                       cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
                       cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
                       cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
-      rbsvar:::log_prior(par, xy$yy, xy$xx,
+      log_prior(par, xy$yy, xy$xx,
                          cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
                          cpp_args$m, cpp_args$A_rows, cpp_args$t,
                          prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,

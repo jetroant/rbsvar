@@ -1,5 +1,5 @@
 
-#NO EXPORT
+# Helper function - NO EXPORT
 list2conStat <- function(chain_list,
                          variable,
                          index_split = NULL,
@@ -45,6 +45,20 @@ list2conStat <- function(chain_list,
   ret
 }
 
+###########################
+### Misc. res functions ###
+###########################
+
+#' R-hat convergence statistic (Documentation incomplete)
+#'
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param burn ...
+#' @param n_eff ...
+#' @param graph ...
+#' @param verbose ...
+#' @return A matrix of element-wise convergence statistics in the first column.
+#'
+#' @export
 convergence <- function(output,
                         burn,
                         n_eff = FALSE,
@@ -88,6 +102,16 @@ convergence <- function(output,
   ret_mat
 }
 
+#' Plots the chains and marginal distirbution w.r.t one parameter (Documentation incomplete)
+#'
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param variable ...
+#' @param burn ...
+#' @param breaks ...
+#' @param real_val ...
+#' @param n_eff ...
+#'
+#' @export
 plot_chains <- function(output,
                         variable = "b1",
                         burn = 0,
@@ -175,7 +199,16 @@ plot_chains <- function(output,
   par(mfrow = c(1,1))
 }
 
-plot_densities <- function(output, verbose = TRUE, drop = 1) {
+#' Plots the densities of the chains as a function of iterations (Documentation incomplete)
+#'
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param verbose ...
+#' @param drop ...
+#'
+#' @export
+plot_densities <- function(output,
+                           verbose = TRUE,
+                           drop = 1) {
   model <- output$model
   d <- output$densities[-c(1:output$args$m0)]
   n <- output$args$n
@@ -194,6 +227,14 @@ plot_densities <- function(output, verbose = TRUE, drop = 1) {
   par(mfrow = c(1,1))
 }
 
+#' Convenience function returning a sample from the posterior (Documentation incomplete)
+#'
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param burn ...
+#' @param N ...
+#' @return A numerical matrix.
+#'
+#' @export
 post_sample <- function(output, burn = 0, N = NA) {
   s <- output$chains[-c(1:output$args$m0),]
   d <- output$densities[-c(1:output$args$m0)]
@@ -210,6 +251,25 @@ post_sample <- function(output, burn = 0, N = NA) {
               "d" = d)
 }
 
+############
+### IRFs ###
+############
+
+#' Computes impulse response functions (Documentation incomplete)
+#'
+#' @param model A list outputted by \code{init_rbsvar()}.
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param burn ...
+#' @param horizon ...
+#' @param N ...
+#' @param cumulate ...
+#' @param shock_sizes ...
+#' @param shocks ...
+#' @param verbose ...
+#' @param parallel ...
+#' @return A list that may be passed to \code{irf_plot()}.
+#'
+#' @export
 irf <- function(model,
                 output,
                 burn = 0,
@@ -306,6 +366,19 @@ irf <- function(model,
   ret
 }
 
+#' Plots impulse response functions (Documentation incomplete)
+#'
+#' @param irf_obj A list outputted by \code{irf()}.
+#' @param varnames ...
+#' @param probs ...
+#' @param mar ...
+#' @param mfrow ...
+#' @param color ...
+#' @param leg ...
+#' @param plot_median ...
+#' @param normalize ...
+#'
+#' @export
 irf_plot <- function(irf_obj,
                      varnames = NULL,
                      probs = c(0.05, 0.16, 0.84, 0.95),
@@ -368,6 +441,10 @@ irf_plot <- function(irf_obj,
   }
   par(mfrow = c(1,1))
 }
+
+#######################################################
+### Shock decompositions and narrative restrictions ###
+#######################################################
 
 shock_decomp <- function(model,
                          output,
@@ -547,6 +624,23 @@ narrative_sign_probs <- function(decomp_obj,
   ret
 }
 
+###########################
+### Marginal likelihood ###
+###########################
+
+#' Computes a numerical estimate for the log-marginal-likelihood (Documentation incomplete)
+#'
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param model A list outputted by \code{init_rbsvar()}.
+#' @param burn ...
+#' @param M ...
+#' @param J ...
+#' @param rel_tune ...
+#' @param parallel ...
+#' @param parallel_likelihood ...
+#' @return A list.
+#'
+#' @export
 marginal_likelihood <- function(output,
                                 model,
                                 burn,
@@ -601,26 +695,21 @@ marginal_likelihood <- function(output,
   # Compute proposal densities (R-implementation is more robust than RcppDist implementation)
   proposal_densities <- mvtnorm::dmvt(s, delta = theta_star, sigma = sigma_star, df = 1, log = TRUE)
 
+  model_R <- build_model_R(model)
   ret <- log_ml_cpp(proposal_densities = proposal_densities, posterior_densities = post$d,
                     theta_star = theta_star, sigma_star = sigma_star, logden_star = logden_star, J = J,
-                    yy = model$xy$yy, xx = model$xy$xx,
-                    m = model$cpp_args$m, A_rows = model$cpp_args$A_rows, t = model$cpp_args$t,
-                    yna_indices = model$cpp_args$yna_indices, B_inverse = model$cpp_args$B_inverse,
-                    mean_cent = model$cpp_args$mean_cent, var_adj = model$cpp_args$var_adj,
-                    first_b = model$cpp_args$first_b, first_sgt = model$cpp_args$first_sgt, first_garch = model$cpp_args$first_garch, first_yna = model$cpp_args$first_yna,
-                    a_mean = model$prior$A$mean, a_cov = model$prior$A$cov, prior_A_diagonal = model$cpp_args$prior_A_diagonal,
-                    b_mean = model$prior$B$mean, b_cov = model$prior$B$cov,
-                    p_prior_mode = model$prior$p[1], p_prior_scale = model$prior$p[2],
-                    q_prior_mode = model$prior$q[1], q_prior_scale = model$prior$q[2],
-                    r_prior_mode = model$prior$r[1], r_prior_scale = model$prior$r[2],
-                   #nodev = nodev,
-                    parallel = parallel, parallel_likelihood = parallel_likelihood)
+                    parallel = parallel, parallel_likelihood = parallel_likelihood,
+                    model_R = model_R)
 
   names(ret) <- c("log_marginal_likelihood", "log_mean_posterior_ordinate",
                   "numerator_log_vec", "denumerator_log_vec")
   ret$time <- Sys.time() - start_time
   ret
 }
+
+###################
+### Forecasting ###
+###################
 
 forecast_rbsvar <- function(model,
                             output,
@@ -635,6 +724,24 @@ forecast_rbsvar <- function(model,
 
 }
 
+##############################################
+### Sign restriction probability algorithm ###
+##############################################
+
+#' Computes sign restriction probabilities a'la Lanne & Luoto (2020) (Documentation incomplete)
+#'
+#' @param model A list outputted by \code{init_rbsvar()}.
+#' @param output A list outputted by \code{est_rbsvar()}.
+#' @param burn ...
+#' @param signs ...
+#' @param horizons ...
+#' @param limit ...
+#' @param N ...
+#' @param cumulate ...
+#' @param verbose ...
+#' @return A list.
+#'
+#' @export
 sign_probabilities <- function(model,
                                output,
                                burn,

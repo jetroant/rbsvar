@@ -1,5 +1,5 @@
 
-#Builds xx and yy from y and p (lags) NO EXPORT
+#Builds xx and yy from y and p (lags) - NO EXPORT
 build_xy <- function(y, p, constant = TRUE) {
   if(p == 0) {
     yy <- y
@@ -24,7 +24,7 @@ build_xy <- function(y, p, constant = TRUE) {
   ret
 }
 
-#Builds xx and yy dummy prior parts from y and p (lags) NO EXPORT
+#Builds xx and yy dummy prior parts from y and p (lags) - NO EXPORT
 build_xy0 <- function(y, p, shrinkage, minnesota_means, constant = TRUE) {
   n <- ncol(y)
   if(is.null(minnesota_means)) minnesota_means <- rep(1, n)
@@ -58,7 +58,7 @@ build_xy0 <- function(y, p, shrinkage, minnesota_means, constant = TRUE) {
 }
 
 #Stacks VAR(p) coefficient matrix to VAR(1) coefficient matrix
-#(companion form, used by irf()) NO EXPORT
+#(companion form, used by irf()) - NO EXPORT
 stackA <- function(A, constant = TRUE) {
   if(constant == TRUE) A <- t(A)[,-1]
   if(constant == FALSE) A <- t(A)
@@ -68,3 +68,20 @@ stackA <- function(A, constant = TRUE) {
   A <- rbind(A, cbind(eye, matrix(0, ncol = m, nrow= nrow(eye))))
   A
 }
+
+# Helper function - NO EXPORT
+build_model_R <- function(model) {
+  model_R <- model$cpp_args
+  model_R[["yy"]] <- model$xy$yy
+  model_R[["xx"]] <- model$xy$xx
+  model_R[["a_mean"]] <- model$prior$A$mean
+  model_R[["a_cov"]] <- model$prior$A$cov
+  model_R[["b_mean"]] <- model$prior$B$mean
+  model_R[["b_cov"]] <- model$prior$B$cov
+  model_R[["p_prior"]] <- model$prior$p
+  model_R[["q_prior"]] <- model$prior$q
+  model_R[["r_prior"]] <- model$prior$r
+  model_R
+}
+
+
