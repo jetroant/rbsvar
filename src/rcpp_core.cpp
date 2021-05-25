@@ -290,6 +290,7 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
 
   //The log-likelihood to be returned
   double ret;
+  double log_abs_det;
   // (garch == true)
   if(first_garch != first_yna) {
     arma::vec BV_inv_dets(t);
@@ -302,14 +303,24 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
         if(V(j,j) == 0) return -arma::datum::inf;
       }
       arma::mat BV = arma::inv( arma::diagmat(V) ) * B;
-      BV_inv_dets(i) = log(abs(arma::det(BV)));
+
+      // Log-determinant
+      double det_val;
+      double det_sign;
+      arma::log_det(det_val, det_sign, BV);
+      BV_inv_dets(i) = det_val;
     }
-    ret = accu(BV_inv_dets) + accu(log_likes);
+    log_abs_det = accu(BV_inv_dets);
 
   // (garch == false)
   } else {
-    ret = t * log(abs(arma::det(B))) + accu(log_likes);
+    double det_val;
+    double det_sign;
+    arma::log_det(det_val, det_sign, B);
+    log_abs_det = t * det_val;
   }
+
+  ret = log_abs_det + accu(log_likes);
   if(std::isnan(ret)) return -arma::datum::inf;
   return ret;
 }
