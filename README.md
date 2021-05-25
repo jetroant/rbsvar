@@ -35,6 +35,6 @@ install.packages("devtools")
 After devtools is installed, install and load the package by:
 
 ```
-devtools::install_github("jetroant/sbetel")
-library(sbetel)
+devtools::install_github("jetroant/rbsvar")
+library(rbsvar)
 ```
