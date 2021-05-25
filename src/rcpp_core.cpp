@@ -39,7 +39,7 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
     - q/exp_p
     - R::lbeta(1/exp_p, exp_q)
     - (1/exp_p + exp_q) * log(
-        1 + pow(abs(x+m), exp_p) / (exp_q * pow((v * sigma), exp_p) * pow((skew*sgn + 1), exp_p))
+        1 + pow(sgn*(x+m), exp_p) / (exp_q * pow((v * sigma), exp_p) * pow((skew*sgn + 1), exp_p))
     );
   return ret;
 }
