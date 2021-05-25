@@ -21,7 +21,7 @@ xcode-select --install
 
 After installing Xcode, a few more steps might still be necessary. For comprehensive instructions, see: https://thecoatlessprofessor.com/programming/cpp/openmp-in-r-on-os-x/#after-3-4-0
 
-In short, (i) the official gfortran 6.1 build (see: https://gcc.gnu.org/wiki/GFortranBinaries#MacOS-11) and (ii) clang (compiler, see: https://uofi.box.com/v/r-macos-clang-pkg) need to be downloaded and installed.
+In short, (i) the official gfortran 6.1 build (see: https://gcc.gnu.org/wiki/GFortranBinaries#MacOS-11) and (ii) clang (compiler, see: https://uofi.box.com/v/r-macos-clang-pkg) may need to be downloaded and installed.
 
 #### Linux:
 Everything should be just fine. Just make sure you have everything Rcpp needs.
