@@ -1,5 +1,7 @@
 # rbsvar 
 
+Bayesian estimation of statistically identified robust structural vectorautoregressive models.
+
 ## Getting Started
 
 ### Prerequisites
