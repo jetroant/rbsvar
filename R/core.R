@@ -266,7 +266,7 @@ init_rbsvar <- function(y,
   if(type == "svar") {
     B_init <- expm::sqrtm(sigma)
     right_permutation <- check_permutation(B_init)
-    if(!right_permutation)  B_init <- diag(abs(diag(B_init)))
+    if(!right_permutation) B_init <- t(chol(B_init))
     Binv_init <- solve(B_init)
     if(B_inverse) b_init <- c(Binv_init) else b_init <- c(B_init)
   }

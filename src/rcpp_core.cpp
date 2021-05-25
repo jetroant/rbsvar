@@ -10,6 +10,7 @@
  // SGT-distribution //
 //////////////////////
 
+// R::beta and R::lbeta are risky...
 // [[Rcpp::export]]
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
   double m = 0;
@@ -341,7 +342,7 @@ bool check_permutation(arma::mat B) {
         if(B(i,j) <= 0) return false;
       }
       if(i < j) {
-        if(abs(B(i,i)) <= B(i,j)) return false;
+        if(B(i,i) <= B(i,j)) return false;
       }
     }
   }
