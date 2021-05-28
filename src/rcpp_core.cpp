@@ -534,7 +534,7 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   double log_diri_prior = 0;
   if(first_regime != first_yna) {
     for(int i = 0; i != REGIME.n_rows; i++) {
-      arma::vec dirichlet_vec = (REGIME.row(0).t() / REGIME.n_rows);
+      arma::vec dirichlet_vec = (REGIME.row(0).t() / REGIME.n_cols);
       log_diri_prior = log_diri_prior + log_dirichlet(dirichlet_vec, dirichlet_alpha);
     }
   }
