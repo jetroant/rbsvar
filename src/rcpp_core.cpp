@@ -181,9 +181,9 @@ Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
 
 // [[Rcpp::export]]
 double log_like(arma::vec state, arma::mat yy, arma::mat xx,
-                const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                const int m, const int A_rows, const int t, const arma::ivec yna_indices, const bool B_inverse,
-                const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
+                const int first_b, const int first_sgt, const int first_garch, const int first_regime, const int first_yna,
+                const int m, const int A_rows, const int t, const arma::ivec regimes, const arma::ivec yna_indices,
+                const bool B_inverse, const bool mean_cent, const bool var_adj, const bool parallel_likelihood) {
 
   //Construct A matrix
   arma::mat A(A_rows, m);
@@ -226,13 +226,27 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
   if(!B_inverse) B = arma::inv(B);
 
   //Construct SGT matrix
-  arma:: mat SGT(m, 3);
+  arma::mat SGT(m, 3);
   for(int i = first_sgt; i != first_sgt + m * 3; ++i) SGT(i - first_sgt) = state(i);
 
   //Construct GARCH matrix
-  arma:: mat GARCH(m, 3);
-  if(first_garch != first_yna) {
-    for(int i = first_garch; i != first_garch + m * 3; ++i) GARCH(i - first_garch) = state(i);
+  arma::mat GARCH(m, 2);
+  if(first_garch != first_regime) {
+    for(int i = first_garch; i != first_garch + m * 2; ++i) GARCH(i - first_garch) = state(i);
+  }
+
+  //Construct REGIME matrix ( < 0 not allowed)
+  arma::mat REGIME(m, regimes.size() + 1, arma::fill::ones);
+  if(first_regime != first_yna) {
+    for(int i = first_regime; i != first_yna; ++i) {
+      REGIME(i - first_regime) = state(i);
+      if(REGIME(i - first_regime) <= 0) return -arma::datum::inf;
+    }
+    for(int i = 0; i != m; i++) {
+      double last_regime = REGIME.n_cols - arma::sum(REGIME.row(i).subvec(0, REGIME.n_cols - 2));
+      if(last_regime <= 0) return -arma::datum::inf;
+      REGIME.col(REGIME.n_cols - 1)(i) = last_regime;
+    }
   }
 
   //Rebuild yy and xx if there are missing values in the data
@@ -250,26 +264,56 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
   }
   arma::mat E(t, m, arma::fill::zeros);
 
-  // (garch == true)
-  arma::mat V_diags(t, m);
-  if(first_garch != first_yna) {
-    arma::mat VE = (yy - fit) * B.t();
-    E.row(0) = VE.row(0);
-    arma::vec v_last(m, arma::fill::zeros);
-    V_diags.row(0) = arma::exp(v_last).t();
-    arma::vec r_exp = arma::exp(GARCH.col(2));
-    for(int i = 1; i != VE.n_rows; i++) {
-      arma::vec last_abse = arma::abs(E.row(i-1)).t();
-      for(int j = 0; j != m; j++) {
-        v_last(j) = GARCH(j,0) * v_last(j) + GARCH(j,1) * pow(last_abse(j), r_exp(j));
-      }
-      V_diags.row(i) = arma::exp(v_last).t();
-      E.row(i) = VE.row(i) / arma::exp(v_last.t());
-    }
+  // (garch == true OR regimes == true)
+  arma::mat RVE = (yy - fit) * B.t();
+  arma::mat RV_diags(t, m, arma::fill::ones);
+  if(first_garch != first_regime || first_regime != first_yna) {
 
-  // (garch == false)
+    E = RVE;
+    arma::vec v_last(m, arma::fill::ones);
+    arma::vec r_last(m, arma::fill::ones);
+    RV_diags.row(0) = v_last.t() % r_last.t(); //not necessary
+
+    for(int i = 1; i != RVE.n_rows; i++) {
+
+      // (garch == true)
+      if(first_garch != first_regime) {
+
+        // Traditional GARCH
+        if(var_adj == true) {
+          arma::vec last_dev = E.row(i-1).t() % E.row(i-1).t(); //^2
+          for(int j = 0; j != m; j++) {
+            v_last(j) = (1 - GARCH(j,0) - GARCH(j,1)) + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
+          }
+          RV_diags.row(i) = arma::sqrt(v_last).t(); //sqrt
+          E.row(i) = RVE.row(i) / arma::sqrt(v_last).t(); //sqrt
+        }
+
+        // Unorthodox GARCH (Unconditional expected value of v_last not fixed)
+        if(var_adj == false) {
+          arma::vec last_dev = arma::abs(E.row(i-1).t()); //abs
+          for(int j = 0; j != m; j++) {
+            v_last(j) = (1 - GARCH(j,0) - GARCH(j,1)) + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
+          }
+          RV_diags.row(i) = v_last.t(); //...
+          E.row(i) = RVE.row(i) / v_last.t(); //...
+        }
+      }
+
+      // (regimes == true)
+      if(first_regime != first_yna) {
+        int REGIME_col = 0;
+        for(int j = 1; j != REGIME.n_cols; j++) {
+          if(i < regimes(j-1)) break;
+          REGIME_col = j;
+        }
+        arma::vec R_diag = REGIME.col(REGIME_col);
+        RV_diags.row(i) = RV_diags.row(i) % R_diag.t();
+        E.row(i) = E.row(i) / R_diag.t(); //needs to be E not RVE if garch == true
+      }
+    }
   } else {
-    E = (yy - fit) * B.t();
+    E = RVE;
   }
 
   //Compute the log-likelihood
@@ -292,28 +336,28 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
   //The log-likelihood to be returned
   double ret;
   double log_abs_det;
-  // (garch == true)
-  if(first_garch != first_yna) {
-    arma::vec BV_inv_dets(t);
-    for(int i = 0; i != t; i++) {
-      arma::mat V = arma::diagmat(V_diags.row(i).t());
 
-      //With extremely bad parameter values the diagonal of V underflows
-      //(e.g. some numerical optimization algorithms might cause such behavior)
+  // (garch == true OR regimes == true)
+  if(first_garch != first_regime || first_regime != first_yna) {
+    arma::vec BRV_inv_dets(t);
+    for(int i = 0; i != t; i++) {
+      arma::mat RV = arma::diagmat(RV_diags.row(i).t());
+
+      // With extremely bad parameter values the diagonal of RV may underflow
+      // (e.g. some numerical optimization algorithms might cause such behavior)
       for(int j = 0; j != m; j++) {
-        if(V(j,j) == 0) return -arma::datum::inf;
+        if(RV(j,j) == 0) return -arma::datum::inf;
       }
-      arma::mat BV = arma::inv( arma::diagmat(V) ) * B;
+      arma::mat BRV = arma::inv( arma::diagmat(RV) ) * B;
 
       // Log-determinant
       double det_val;
       double det_sign;
-      arma::log_det(det_val, det_sign, BV);
-      BV_inv_dets(i) = det_val;
+      arma::log_det(det_val, det_sign, BRV);
+      BRV_inv_dets(i) = det_val;
     }
-    log_abs_det = accu(BV_inv_dets);
+    log_abs_det = accu(BRV_inv_dets);
 
-  // (garch == false)
   } else {
     double det_val;
     double det_sign;
@@ -350,14 +394,21 @@ bool check_permutation(arma::mat B) {
 }
 
 // [[Rcpp::export]]
+double log_dirichlet(arma::vec x, const double alpha = 2) {
+  if(arma::sum(x) != 1) return -arma::datum::inf;
+  for(int i = 0; i < x.size(); i++) if(x(i) < 0) return -arma::datum::inf;
+  return arma::sum( (alpha - 1) * arma::log(x) );
+}
+
+// [[Rcpp::export]]
 double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
-                 const int first_b, const int first_sgt, const int first_garch, const int first_yna,
-                 const int m, const int A_rows, const int t,
+                 const int first_b, const int first_sgt, const int first_garch,  const int first_regime, const int first_yna,
+                 const int m, const int A_rows, const int t, const arma::ivec regimes,
                  const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal,
                  const arma::vec b_mean, const arma::mat b_cov,
                  const double p_prior_mode, const double p_prior_scale,
                  const double q_prior_mode, const double q_prior_scale,
-                 const double r_prior_mode, const double r_prior_scale,
+                 const double dirichlet_alpha,
                  const bool B_inverse) {
 
   //Prior on A (e.g. Minnesota prior)
@@ -435,14 +486,15 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
   arma:: mat SGT(m, 3);
   for(int i = first_sgt; i != first_sgt + m * 3; ++i) SGT(i - first_sgt) = state(i);
 
-  //Construct GARCH matrix and check feasibility of gammas and r
-  arma:: mat GARCH(m, 3);
-  if(first_garch != first_yna) {
-    for(int i = first_garch; i != first_garch + m * 3; ++i) GARCH(i - first_garch) = state(i);
+  //Construct GARCH matrix and check feasibility of alpha and beta
+  arma:: mat GARCH(m, 2);
+  if(first_garch != first_regime) {
+    for(int i = first_garch; i != first_garch + m * 2; ++i) GARCH(i - first_garch) = state(i);
     for(int i = 0; i != m; ++i) {
       if(GARCH.row(i)(0) < 0) return -arma::datum::inf;
+      if(GARCH.row(i)(0) > 1) return -arma::datum::inf;
       if(GARCH.row(i)(1) < 0) return -arma::datum::inf;
-      if(GARCH.row(i)(2) > SGT.row(i)(1) + SGT.row(i)(2)) return -arma::datum::inf;
+      if(GARCH.row(i)(1) > 1) return -arma::datum::inf;
     }
   }
 
@@ -464,17 +516,31 @@ double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx,
       arma::log_normpdf(sgt_param(2), q_prior_mode, q_prior_scale);
   }
 
-  //Compute the log-prior on r parameters
-  arma::vec log_r_prior(m, arma::fill::zeros);
-  if(first_garch != first_yna) {
-    for(int i = 0; i != m; ++i) {
-      arma::vec garch_param = vectorise(GARCH.row(i));
-      log_r_prior(i) = arma::log_normpdf(garch_param(2), r_prior_mode, r_prior_scale);
+  //Construct REGIME matrix ( < 0 not allowed)
+  arma::mat REGIME(m, regimes.size() + 1, arma::fill::ones);
+  if(first_regime != first_yna) {
+    for(int i = first_regime; i != first_yna; ++i) {
+      REGIME(i - first_regime) = state(i);
+      if(REGIME(i - first_regime) <= 0) return -arma::datum::inf;
+    }
+    for(int i = 0; i != m; i++) {
+      double last_regime = REGIME.n_cols - arma::sum(REGIME.row(i).subvec(0, REGIME.n_cols - 2));
+      if(last_regime <= 0) return -arma::datum::inf;
+      REGIME.col(REGIME.n_cols - 1)(i) = last_regime;
+    }
+  }
+
+  //Dirichlet prior on regime parameters
+  double log_diri_prior = 0;
+  if(first_regime != first_yna) {
+    for(int i = 0; i != REGIME.n_rows; i++) {
+      arma::vec dirichlet_vec = (REGIME.row(0).t() / REGIME.n_rows);
+      log_diri_prior = log_diri_prior + log_dirichlet(dirichlet_vec, dirichlet_alpha);
     }
   }
 
   //Return the log-prior
-  double ret = accu(log_pq_prior) + accu(log_r_prior) + log_a_prior + log_b_prior;
+  double ret = accu(log_pq_prior) + log_a_prior + log_b_prior + log_diri_prior;
   if(std::isnan(ret)) ret = -arma::datum::inf;
   return ret;
 }
@@ -491,10 +557,12 @@ struct Model {
   int first_b;
   int first_sgt;
   int first_garch;
+  int first_regime;
   int first_yna;
   int m;
   int A_rows;
   int t;
+  arma::ivec regimes;
   arma::ivec yna_indices;
   bool mean_cent;
   bool var_adj;
@@ -508,7 +576,7 @@ struct Model {
   arma::mat b_cov;
   arma::vec p_prior;
   arma::vec q_prior;
-  arma::vec r_prior;
+  double dirichlet_alpha;
 
   void init(Rcpp::List model_R) {
     arma::mat yy_ = model_R["yy"]; yy = yy_;
@@ -516,10 +584,12 @@ struct Model {
     int first_b_ = model_R["first_b"]; first_b = first_b_;
     int first_sgt_ = model_R["first_sgt"]; first_sgt = first_sgt_;
     int first_garch_ = model_R["first_garch"]; first_garch = first_garch_;
+    int first_regime_ = model_R["first_regime"]; first_regime =first_regime_;
     int first_yna_ = model_R["first_yna"]; first_yna = first_yna_;
     int m_ = model_R["m"]; m = m_;
     int A_rows_ = model_R["A_rows"]; A_rows = A_rows_;
     int t_ = model_R["t"]; t = t_;
+    arma::ivec regimes_ = model_R["regimes"]; regimes = regimes_;
     arma::ivec yna_indices_ = model_R["yna_indices"]; yna_indices = yna_indices_;
     bool mean_cent_ = model_R["mean_cent"]; mean_cent = mean_cent_;
     bool var_adj_ = model_R["var_adj"]; var_adj = var_adj_;
@@ -532,24 +602,24 @@ struct Model {
     arma::mat b_cov_ = model_R["b_cov"]; b_cov = b_cov_;
     arma::vec p_prior_ = model_R["p_prior"]; p_prior = p_prior_;
     arma::vec q_prior_ = model_R["q_prior"]; q_prior = q_prior_;
-    arma::vec r_prior_ = model_R["r_prior"]; r_prior = r_prior_;
+    double dirichlet_alpha_ = model_R["dirichlet_alpha"]; dirichlet_alpha = dirichlet_alpha_;
   }
 };
 
 double log_posterior(const arma::vec par, const Model M, const bool parallel_likelihood) {
 
   double ll = log_like(par, M.yy, M.xx,
-                       M.first_b, M.first_sgt, M.first_garch, M.first_yna,
+                       M.first_b, M.first_sgt, M.first_garch, M.first_regime, M.first_yna,
                        M.m, M.A_rows, M.t,
-                       M.yna_indices, M.B_inverse,
+                       M.regimes, M.yna_indices, M.B_inverse,
                        M.mean_cent, M.var_adj, parallel_likelihood);
   double lp = log_prior(par, M.yy, M.xx,
-                        M.first_b, M.first_sgt, M.first_garch, M.first_yna,
-                        M.m, M.A_rows, M.t,
+                        M.first_b, M.first_sgt, M.first_garch, M.first_regime, M.first_yna,
+                        M.m, M.A_rows, M.t, M.regimes,
                         M.a_mean, M.a_cov, M.prior_A_diagonal, M.b_mean, M.b_cov,
                         M.p_prior(0), M.p_prior(1),
                         M.q_prior(0), M.q_prior(1),
-                        M.r_prior(0), M.r_prior(1),
+                        M.dirichlet_alpha,
                         M.B_inverse);
   return ll + lp;
 }

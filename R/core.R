@@ -19,15 +19,17 @@ init_optim <- function(pre_init,
 
   obj_full <- function(state) {
     ret <- -(
+
       log_like(state, xy$yy, xy$xx,
-               cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
+               cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_regime, cpp_args$first_yna,
+               cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$regimes, cpp_args$yna_indices, cpp_args$B_inverse,
                cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
         log_prior(state, xy$yy, xy$xx,
-                  cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                  cpp_args$m, cpp_args$A_rows, cpp_args$t,
+                  cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_regime, cpp_args$first_yna,
+                  cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$regimes,
                   prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                  prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2])
+                  prior$p[1], prior$p[2], prior$q[1], prior$q[2], cpp_args$dirichlet_alpha,
+                  cpp_args$B_inverse)
     )
     if(ret == Inf) ret <- -min_density
     ret
@@ -147,11 +149,12 @@ init_rbsvar <- function(y,
                         constant = TRUE,
                         type = c("svar", "var")[1],
                         garch = FALSE,
+                        regimes = c(),
                         mean_cent = TRUE,
                         var_adj = FALSE,
                         p_prior = c(2, 1),
                         q_prior = c(1, 1),
-                        r_prior = c(log(1), 1),
+                        dirichlet_alpha = 2,
                         B_prior = c(NA, NA),
                         B_inverse = TRUE,
                         shrinkage = Inf,
@@ -177,6 +180,10 @@ init_rbsvar <- function(y,
     shrinkage <- Inf
     if(verbose == TRUE) cat("As 'lags = 0', 'shrinkage' parameter is omitted. \n")
   }
+  if(var_adj == TRUE & mean_cent == FALSE) stop("'mean_cent == TRUE' required if 'var_adj == TRUE'")
+  if(garch == TRUE & var_adj == FALSE) {
+    if(verbose) cat("NOTE: 'var_adj == FALSE' and 'garch == TRUE' --> Unconditional exptected value of the GARCH process cannot be fixed. \n")
+  }
 
   # Missing values in data: (Only type = "var" allowed)
 
@@ -200,11 +207,10 @@ init_rbsvar <- function(y,
     yna_init <- c()
   }
 
-  # Prior:
 
+  # Prior:
   prior$p <- p_prior
   prior$q <- q_prior
-  prior$r <- r_prior
   if(sum(is.na(B_prior)) == 0) {
     if(type == "svar") {
       prior$B <- list("mean" = c(diag(ncol(y)) * B_prior[1]),
@@ -284,31 +290,40 @@ init_rbsvar <- function(y,
 
   if(is.null(init)) {
     if(verbose) cat("Looking for initial sgt-parameters... \n")
-    neg_ll_sgt <- function(par, y, max_ret = 1000000) {
-      if(abs(par[3]) > 0.99) return(max_ret)
+    neg_ll_sgt <- function(par, e, max_ret = 1000000) {
+      if(abs(par[1]) > 0.99) return(max_ret)
       ret <- -sum(
-        sgt::dsgt(y, mu = 0, sigma = exp(1), lambda = par[1],
+        sgt::dsgt(e, mu = 0, sigma = 1, lambda = par[1],
                   p = exp(par[2]), q = exp(par[3]), mean.cent = mean_cent, var.adj = var_adj, log = T)
       )
       if(abs(ret) == Inf | is.nan(ret)) return(max_ret)
       ret
     }
-    fit_sgt <- function(y, init_sgt) {
-      optim(init_sgt, neg_ll_sgt, method = "L-BFGS-B", y = y)
+    fit_sgt <- function(e, init_sgt) {
+      optim(init_sgt, neg_ll_sgt, method = "L-BFGS-B", e = e)
     }
     E <- (xy$yy - xy$xx %*% matrix(ols_est, ncol = ncol(y))) %*% t(Binv_init)
     for(i in 1:ncol(E)) {
-      try(SGT_param[i,] <- fit_sgt(E[,i], SGT_param[i,])$par,
+      try(SGT_param[i,] <- fit_sgt(e = E[,i], init_sgt = SGT_param[i,])$par,
           silent = TRUE)
     }
   }
 
   # Garch-parameters
   if(garch == TRUE) {
-    GARCH_param <- matrix(0, nrow = m, ncol = 3)
-    colnames(GARCH_param) <- c("gamma_0", "gamma_1", "r")
-    GARCH_param[,"gamma_0"] <- 0.1
-    GARCH_param[,"gamma_1"] <- 0.1
+    GARCH_param <- matrix(0, nrow = m, ncol = 2)
+    colnames(GARCH_param) <- c("alpha", "beta")
+    GARCH_param[,"alpha"] <- 0.1
+    GARCH_param[,"beta"] <- 0.1
+  }
+
+  # Regime-parameters (relative scales between regimes)
+  if(length(regimes) != 0) {
+    REGIME_param <- matrix(1, nrow = m, ncol = length(regimes))
+    regime_init <- c(REGIME_param)
+  } else {
+    regimes <- c(-1)
+    regime_init <- c()
   }
 
   # User provided initial values
@@ -319,7 +334,7 @@ init_rbsvar <- function(y,
     }
   }
 
-  # Check the feasibility of the initial values (p, q and r)
+  # Check the feasibility of the initial values (p, q and alpha and beta)
   count <- 0
   if(var_adj == FALSE) {
     for(i in 1:m) {
@@ -342,10 +357,11 @@ init_rbsvar <- function(y,
   if(garch == TRUE) {
     count <- 0
     for(i in 1:m) {
-      if(GARCH_param[i, "r"] > SGT_param[i, "p"] + SGT_param[i, "q"]) {
-        if(count == 0 & verbose == TRUE) cat("Initial parameter values of 'r' altered as the ones provided were not feasible. \n")
+      if(GARCH_param[i, "alpha"] < 0 | GARCH_param[i, "alpha"] >= 1 | GARCH_param[i, "beta"] < 0 | GARCH_param[i, "beta"] >= 1) {
+        if(count == 0 & verbose == TRUE) cat("Initial parameter values of 'alpha' and/or 'beta' altered as the ones provided were not feasible. \n")
         count <- count + 1
-        GARCH_param[i, "r"] <- min(0, (SGT_param[i, "p"] + SGT_param[i, "q"]))
+        GARCH_param[i, "alpha"] <- 0.1
+        GARCH_param[i, "beta"] <- 0.1
       }
     }
     garch_init <- c(GARCH_param)
@@ -355,9 +371,9 @@ init_rbsvar <- function(y,
 
   if(is.null(init)) {
     if(lags > 0) {
-      pre_init <- c(ols_est, b_init, sgt_init, garch_init, yna_init)
+      pre_init <- c(ols_est, b_init, sgt_init, garch_init, regime_init, yna_init)
     } else {
-      pre_init <- c(b_init, sgt_init, garch_init, yna_init)
+      pre_init <- c(b_init, sgt_init, garch_init, regime_init, yna_init)
     }
   } else {
     pre_init <- init
@@ -385,17 +401,20 @@ init_rbsvar <- function(y,
 
   # Parameters required by cpp functions
   cpp_args <- list("m" = ncol(xy$yy),
-                   "first_b" = length(pre_init) - length(b_init) - length(sgt_init) - length(garch_init) - length(yna_init),
-                   "first_sgt" = length(pre_init) - length(sgt_init) - length(garch_init) - length(yna_init),
-                   "first_garch" = length(pre_init) - length(garch_init) - length(yna_init),
+                   "first_b" = length(pre_init) - length(b_init) - length(sgt_init) - length(garch_init) - length(regime_init) - length(yna_init),
+                   "first_sgt" = length(pre_init) - length(sgt_init) - length(garch_init) - length(regime_init) - length(yna_init),
+                   "first_garch" = length(pre_init) - length(garch_init) - length(regime_init) - length(yna_init),
+                   "first_regime" = length(pre_init) - length(regime_init) - length(yna_init),
                    "first_yna" = length(pre_init) - length(yna_init),
+                   "regimes" = regimes,
                    "yna_indices" = yna_indices,
                    "A_rows" = ncol(xy$xx),
                    "t" = nrow(xy$yy),
                    "prior_A_diagonal" = prior_A_diagonal,
                    "B_inverse" = B_inverse,
                    "mean_cent" = mean_cent,
-                   "var_adj" = var_adj)
+                   "var_adj" = var_adj,
+                   "dirichlet_alpha" = dirichlet_alpha)
   if(lags == 0) cpp_args$A_rows <- 0
 
   # Optimal initial values
@@ -501,10 +520,10 @@ est_rbsvar <- function(model,
   # Sampler runs here
   model_R <- build_model_R(model)
   sampler_out <- sampler(N = N, n = n, m0 = m0, K = K, gamma = gamma,
-                                  init_draws = init_draws,
-                                  output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
-                                  parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
-                                  model_R = model_R, progress_bar = progress_bar)
+                         init_draws = init_draws,
+                         output_as_input = output_as_input, old_chain = old_chain, new_chain = new_chain,
+                         parallel = parallel_chains, parallel_likelihood = parallel_likelihood,
+                         model_R = model_R, progress_bar = progress_bar)
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())
 
   # Clean up the output
@@ -530,13 +549,16 @@ est_rbsvar <- function(model,
                                      paste0("sgt", (model$cpp_args$first_sgt + 1):length(model$init$init_mode) - model$cpp_args$first_sgt))
   }
   if(model$garch == TRUE) {
-    sgt_indices <- grep("sgt", colnames(sampler_out$draws))
-    garch_indices <- sgt_indices[-c(1:(model$cpp_args$m*3))]
+    garch_indices <- (model$cpp_args$first_garch + 1):ncol(sampler_out$draws)
     colnames(sampler_out$draws)[garch_indices] <- paste0("garch", 1:length(garch_indices))
   }
+  if(model$cpp_args$regimes[1] != -1) {
+    regime_indices <- (model$cpp_args$first_regime + 1):ncol(sampler_out$draws)
+    colnames(sampler_out$draws)[regime_indices] <- paste0("reg", 1:length(regime_indices))
+  }
   if(model$cpp_args$yna_indices[1] != -1) {
-    y_indices <- (ncol(sampler_out$draws) - length(model$cpp_args$yna_indices) + 1):ncol(sampler_out$draws)
-    colnames(sampler_out$draws)[y_indices] <- paste0("y", 1:length(model$cpp_args$yna_indices))
+    yna_indices <- (model$cpp_args$first_yna + 1):ncol(sampler_out$draws)
+    colnames(sampler_out$draws)[yna_indices] <- paste0("y", 1:length(yna_indices))
   }
 
   time <- Sys.time() - start_time
@@ -578,14 +600,14 @@ eval_rbsvar <- function(model,
   prior <- model$prior
   ret <- (
     log_like(par, xy$yy, xy$xx,
-                      cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                      cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$yna_indices, cpp_args$B_inverse,
+                      cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_regime, cpp_args$first_yna,
+                      cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$regimes, cpp_args$yna_indices, cpp_args$B_inverse,
                       cpp_args$mean_cent, cpp_args$var_adj, parallel_likelihood) +
       log_prior(par, xy$yy, xy$xx,
-                         cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_yna,
-                         cpp_args$m, cpp_args$A_rows, cpp_args$t,
+                         cpp_args$first_b, cpp_args$first_sgt, cpp_args$first_garch, cpp_args$first_regime, cpp_args$first_yna,
+                         cpp_args$m, cpp_args$A_rows, cpp_args$t, cpp_args$regimes,
                          prior$A$mean, prior$A$cov, cpp_args$prior_A_diagonal, prior$B$mean, prior$B$cov,
-                         prior$p[1], prior$p[2], prior$q[1], prior$q[2], prior$r[1], prior$r[2],
+                         prior$p[1], prior$p[2], prior$q[1], prior$q[2], cpp_args$dirichlet_alpha,
                          cpp_args$B_inverse)
   )
   if(!is.na(max_cores)) RcppParallel::setThreadOptions(numThreads = RcppParallel::defaultNumThreads())

@@ -80,7 +80,6 @@ build_model_R <- function(model) {
   model_R[["b_cov"]] <- model$prior$B$cov
   model_R[["p_prior"]] <- model$prior$p
   model_R[["q_prior"]] <- model$prior$q
-  model_R[["r_prior"]] <- model$prior$r
   model_R
 }
 

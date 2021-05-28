@@ -82,8 +82,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // log_like
-double log_like(arma::vec state, arma::mat yy, arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const int m, const int A_rows, const int t, const arma::ivec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const bool parallel_likelihood);
-RcppExport SEXP _rbsvar_log_like(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP parallel_likelihoodSEXP) {
+double log_like(arma::vec state, arma::mat yy, arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_regime, const int first_yna, const int m, const int A_rows, const int t, const arma::ivec regimes, const arma::ivec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const bool parallel_likelihood);
+RcppExport SEXP _rbsvar_log_like(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_regimeSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP regimesSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP parallel_likelihoodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -93,16 +93,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type first_b(first_bSEXP);
     Rcpp::traits::input_parameter< const int >::type first_sgt(first_sgtSEXP);
     Rcpp::traits::input_parameter< const int >::type first_garch(first_garchSEXP);
+    Rcpp::traits::input_parameter< const int >::type first_regime(first_regimeSEXP);
     Rcpp::traits::input_parameter< const int >::type first_yna(first_ynaSEXP);
     Rcpp::traits::input_parameter< const int >::type m(mSEXP);
     Rcpp::traits::input_parameter< const int >::type A_rows(A_rowsSEXP);
     Rcpp::traits::input_parameter< const int >::type t(tSEXP);
+    Rcpp::traits::input_parameter< const arma::ivec >::type regimes(regimesSEXP);
     Rcpp::traits::input_parameter< const arma::ivec >::type yna_indices(yna_indicesSEXP);
     Rcpp::traits::input_parameter< const bool >::type B_inverse(B_inverseSEXP);
     Rcpp::traits::input_parameter< const bool >::type mean_cent(mean_centSEXP);
     Rcpp::traits::input_parameter< const bool >::type var_adj(var_adjSEXP);
     Rcpp::traits::input_parameter< const bool >::type parallel_likelihood(parallel_likelihoodSEXP);
-    rcpp_result_gen = Rcpp::wrap(log_like(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, yna_indices, B_inverse, mean_cent, var_adj, parallel_likelihood));
+    rcpp_result_gen = Rcpp::wrap(log_like(state, yy, xx, first_b, first_sgt, first_garch, first_regime, first_yna, m, A_rows, t, regimes, yna_indices, B_inverse, mean_cent, var_adj, parallel_likelihood));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -117,9 +119,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// log_dirichlet
+double log_dirichlet(arma::vec x, const double alpha);
+RcppExport SEXP _rbsvar_log_dirichlet(SEXP xSEXP, SEXP alphaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::vec >::type x(xSEXP);
+    Rcpp::traits::input_parameter< const double >::type alpha(alphaSEXP);
+    rcpp_result_gen = Rcpp::wrap(log_dirichlet(x, alpha));
+    return rcpp_result_gen;
+END_RCPP
+}
 // log_prior
-double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_yna, const int m, const int A_rows, const int t, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double r_prior_mode, const double r_prior_scale, const bool B_inverse);
-RcppExport SEXP _rbsvar_log_prior(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP r_prior_modeSEXP, SEXP r_prior_scaleSEXP, SEXP B_inverseSEXP) {
+double log_prior(arma::vec state, const arma::mat yy, const arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_regime, const int first_yna, const int m, const int A_rows, const int t, const arma::ivec regimes, const arma::vec a_mean, const arma::mat a_cov, const bool prior_A_diagonal, const arma::vec b_mean, const arma::mat b_cov, const double p_prior_mode, const double p_prior_scale, const double q_prior_mode, const double q_prior_scale, const double dirichlet_alpha, const bool B_inverse);
+RcppExport SEXP _rbsvar_log_prior(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_regimeSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP regimesSEXP, SEXP a_meanSEXP, SEXP a_covSEXP, SEXP prior_A_diagonalSEXP, SEXP b_meanSEXP, SEXP b_covSEXP, SEXP p_prior_modeSEXP, SEXP p_prior_scaleSEXP, SEXP q_prior_modeSEXP, SEXP q_prior_scaleSEXP, SEXP dirichlet_alphaSEXP, SEXP B_inverseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -129,10 +143,12 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type first_b(first_bSEXP);
     Rcpp::traits::input_parameter< const int >::type first_sgt(first_sgtSEXP);
     Rcpp::traits::input_parameter< const int >::type first_garch(first_garchSEXP);
+    Rcpp::traits::input_parameter< const int >::type first_regime(first_regimeSEXP);
     Rcpp::traits::input_parameter< const int >::type first_yna(first_ynaSEXP);
     Rcpp::traits::input_parameter< const int >::type m(mSEXP);
     Rcpp::traits::input_parameter< const int >::type A_rows(A_rowsSEXP);
     Rcpp::traits::input_parameter< const int >::type t(tSEXP);
+    Rcpp::traits::input_parameter< const arma::ivec >::type regimes(regimesSEXP);
     Rcpp::traits::input_parameter< const arma::vec >::type a_mean(a_meanSEXP);
     Rcpp::traits::input_parameter< const arma::mat >::type a_cov(a_covSEXP);
     Rcpp::traits::input_parameter< const bool >::type prior_A_diagonal(prior_A_diagonalSEXP);
@@ -142,10 +158,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type p_prior_scale(p_prior_scaleSEXP);
     Rcpp::traits::input_parameter< const double >::type q_prior_mode(q_prior_modeSEXP);
     Rcpp::traits::input_parameter< const double >::type q_prior_scale(q_prior_scaleSEXP);
-    Rcpp::traits::input_parameter< const double >::type r_prior_mode(r_prior_modeSEXP);
-    Rcpp::traits::input_parameter< const double >::type r_prior_scale(r_prior_scaleSEXP);
+    Rcpp::traits::input_parameter< const double >::type dirichlet_alpha(dirichlet_alphaSEXP);
     Rcpp::traits::input_parameter< const bool >::type B_inverse(B_inverseSEXP);
-    rcpp_result_gen = Rcpp::wrap(log_prior(state, yy, xx, first_b, first_sgt, first_garch, first_yna, m, A_rows, t, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, r_prior_mode, r_prior_scale, B_inverse));
+    rcpp_result_gen = Rcpp::wrap(log_prior(state, yy, xx, first_b, first_sgt, first_garch, first_regime, first_yna, m, A_rows, t, regimes, a_mean, a_cov, prior_A_diagonal, b_mean, b_cov, p_prior_mode, p_prior_scale, q_prior_mode, q_prior_scale, dirichlet_alpha, B_inverse));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -253,9 +268,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_dmvnrm_arma_diagonal", (DL_FUNC) &_rbsvar_dmvnrm_arma_diagonal, 4},
     {"_rbsvar_fill_xx", (DL_FUNC) &_rbsvar_fill_xx, 4},
     {"_rbsvar_garch_out", (DL_FUNC) &_rbsvar_garch_out, 6},
-    {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 15},
+    {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 17},
     {"_rbsvar_check_permutation", (DL_FUNC) &_rbsvar_check_permutation, 1},
-    {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 22},
+    {"_rbsvar_log_dirichlet", (DL_FUNC) &_rbsvar_log_dirichlet, 2},
+    {"_rbsvar_log_prior", (DL_FUNC) &_rbsvar_log_prior, 23},
     {"_rbsvar_sampler", (DL_FUNC) &_rbsvar_sampler, 13},
     {"_rbsvar_stackA_cpp", (DL_FUNC) &_rbsvar_stackA_cpp, 2},
     {"_rbsvar_irf_cpp", (DL_FUNC) &_rbsvar_irf_cpp, 11},
