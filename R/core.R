@@ -182,7 +182,7 @@ init_rbsvar <- function(y,
   }
   if(var_adj == TRUE & mean_cent == FALSE) stop("'mean_cent == TRUE' required if 'var_adj == TRUE'")
   if(garch == TRUE & var_adj == FALSE) {
-    if(verbose) cat("NOTE: 'var_adj == FALSE' and 'garch == TRUE' --> Unconditional exptected value of the GARCH process cannot be fixed. \n")
+    if(verbose) cat("NOTE: 'var_adj == FALSE' and 'garch == TRUE' --> Unconditional expected value of the GARCH process cannot be fixed. \n")
   }
 
   # Missing values in data: (Only type = "var" allowed)

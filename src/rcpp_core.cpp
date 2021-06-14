@@ -155,6 +155,7 @@ arma::mat fill_xx(arma::mat xx, arma::mat yy, const int m, const int t) {
   return(xx);
 }
 
+// NOT USED!
 // [[Rcpp::export]]
 Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
                      int t, int m) {
@@ -279,7 +280,7 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
       // (garch == true)
       if(first_garch != first_regime) {
 
-        // Traditional GARCH
+        // Fix the unconditional expected value
         if(var_adj == true) {
           arma::vec last_dev = E.row(i-1).t() % E.row(i-1).t(); //^2
           for(int j = 0; j != m; j++) {
@@ -289,14 +290,14 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
           E.row(i) = RVE.row(i) / arma::sqrt(v_last).t(); //sqrt
         }
 
-        // Unorthodox GARCH (Unconditional expected value of v_last not fixed)
+        // Do NOT fix the unconditional expected value
         if(var_adj == false) {
-          arma::vec last_dev = arma::abs(E.row(i-1).t()); //abs
+          arma::vec last_dev = E.row(i-1).t() % E.row(i-1).t(); //^2
           for(int j = 0; j != m; j++) {
-            v_last(j) = (1 - GARCH(j,0) - GARCH(j,1)) + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
+            v_last(j) = 1 + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
           }
-          RV_diags.row(i) = v_last.t(); //...
-          E.row(i) = RVE.row(i) / v_last.t(); //...
+          RV_diags.row(i) = arma::sqrt(v_last).t(); //sqrt
+          E.row(i) = RVE.row(i) / arma::sqrt(v_last).t(); //sqrt
         }
       }
 
