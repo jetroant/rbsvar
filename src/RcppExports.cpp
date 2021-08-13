@@ -23,6 +23,40 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// p_sgt0
+double p_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj);
+RcppExport SEXP _rbsvar_p_sgt0(SEXP xSEXP, SEXP sigmaSEXP, SEXP skewSEXP, SEXP pSEXP, SEXP qSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type skew(skewSEXP);
+    Rcpp::traits::input_parameter< double >::type p(pSEXP);
+    Rcpp::traits::input_parameter< double >::type q(qSEXP);
+    Rcpp::traits::input_parameter< const bool >::type mean_cent(mean_centSEXP);
+    Rcpp::traits::input_parameter< const bool >::type var_adj(var_adjSEXP);
+    rcpp_result_gen = Rcpp::wrap(p_sgt0(x, sigma, skew, p, q, mean_cent, var_adj));
+    return rcpp_result_gen;
+END_RCPP
+}
+// abse_sgt0
+double abse_sgt0(double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj, int resolution);
+RcppExport SEXP _rbsvar_abse_sgt0(SEXP sigmaSEXP, SEXP skewSEXP, SEXP pSEXP, SEXP qSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP resolutionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type skew(skewSEXP);
+    Rcpp::traits::input_parameter< double >::type p(pSEXP);
+    Rcpp::traits::input_parameter< double >::type q(qSEXP);
+    Rcpp::traits::input_parameter< const bool >::type mean_cent(mean_centSEXP);
+    Rcpp::traits::input_parameter< const bool >::type var_adj(var_adjSEXP);
+    Rcpp::traits::input_parameter< int >::type resolution(resolutionSEXP);
+    rcpp_result_gen = Rcpp::wrap(abse_sgt0(sigma, skew, p, q, mean_cent, var_adj, resolution));
+    return rcpp_result_gen;
+END_RCPP
+}
 // dmvnrm_arma
 double dmvnrm_arma(arma::vec const& x, arma::vec const& mean, arma::mat const& sigma, bool const logd);
 RcppExport SEXP _rbsvar_dmvnrm_arma(SEXP xSEXP, SEXP meanSEXP, SEXP sigmaSEXP, SEXP logdSEXP) {
@@ -264,6 +298,8 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_log_sgt0", (DL_FUNC) &_rbsvar_log_sgt0, 7},
+    {"_rbsvar_p_sgt0", (DL_FUNC) &_rbsvar_p_sgt0, 7},
+    {"_rbsvar_abse_sgt0", (DL_FUNC) &_rbsvar_abse_sgt0, 7},
     {"_rbsvar_dmvnrm_arma", (DL_FUNC) &_rbsvar_dmvnrm_arma, 4},
     {"_rbsvar_dmvnrm_arma_diagonal", (DL_FUNC) &_rbsvar_dmvnrm_arma_diagonal, 4},
     {"_rbsvar_fill_xx", (DL_FUNC) &_rbsvar_fill_xx, 4},

@@ -10,7 +10,7 @@
  // SGT-distribution //
 //////////////////////
 
-// R::beta and R::lbeta are risky...
+// R::beta and R::lbeta might be risky...
 // [[Rcpp::export]]
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
   double m = 0;
@@ -44,6 +44,97 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
     );
   return ret;
 }
+
+// [[Rcpp::export]]
+double p_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
+  double m = 0;
+  double v = 1;
+  double exp_p = exp(p);
+  double exp_q = exp(q);
+  if(var_adj == true) {
+    if((exp_p * exp_q) < 2) return -arma::datum::inf;
+    v = pow(exp_q, -(1/exp_p)) * pow(
+      (3 * pow(skew, 2) + 1)
+      * (R::beta((3/exp_p), (exp_q - (2/exp_p))) / R::beta((1/exp_p), exp_q))
+      - 4 * pow(skew, 2)
+      * pow((R::beta((2/exp_p), (exp_q - (1/exp_p))) / R::beta((1/exp_p), exp_q)), 2),
+      -(0.5));
+  }
+  if(mean_cent == true) {
+    if((exp_p * exp_q) < 1) return -arma::datum::inf;
+    m = (2 * v * sigma * skew * pow(exp_q, (1/exp_p)) * R::beta((2/exp_p), (exp_q-(1/exp_p)))) / R::beta((1/exp_p), exp_q);
+    x = x + m;
+  }
+  bool flip = false;
+  if(x > 0) flip = true;
+  if(flip) skew = -skew;
+  if(flip) x = -x;
+  Rcpp::NumericVector q_vec(1);
+  double pt = (v * sigma * (1 - skew)/(-x));
+  q_vec(0) = 1 / (1 + exp_q * pow(pt, exp_p));
+  double pbeta_val = p4beta(q_vec, 1/exp_p, exp_q, 0, 1)(0);
+  double ret = (1 - skew)/2 + (skew - 1)/2 * pbeta_val;
+  if(flip) ret = 1 - ret;
+  return ret;
+}
+
+double gammafun(double x) {
+  arma::vec vec(1);
+  vec(0) = x;
+  arma::vec retvec = arma::tgamma(vec);
+  return retvec(0);
+}
+
+double trap_integral(double lower, double upper, int resolution,
+                     double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
+  double grid_den = (upper - lower) / (resolution - 1);
+  arma::vec grid(resolution);
+  for(int i = 0; i < resolution; i++) grid(i) = lower + i * grid_den;
+  arma::vec fun_val(resolution);
+  for(int i = 0; i < resolution; i++) fun_val(i) = grid(i) * exp(log_sgt0(grid(i), sigma, skew, p, q, mean_cent, var_adj));
+  double ret = (upper - lower) * arma::mean(fun_val);
+  return ret;
+}
+
+// [[Rcpp::export]]
+double abse_sgt0(double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj,
+                 int resolution = 10) {
+
+  double m = 0;
+  double v = 1;
+  double exp_p = exp(p);
+  double exp_q = exp(q);
+  if(var_adj == true) {
+    if((exp_p * exp_q) < 2) return -arma::datum::inf;
+    v = pow(exp_q, -(1/exp_p)) * pow(
+      (3 * pow(skew, 2) + 1)
+      * (R::beta((3/exp_p), (exp_q - (2/exp_p))) / R::beta((1/exp_p), exp_q))
+      - 4 * pow(skew, 2)
+      * pow((R::beta((2/exp_p), (exp_q - (1/exp_p))) / R::beta((1/exp_p), exp_q)), 2),
+      -(0.5));
+  }
+  double exp_p_inv = 1/exp_p;
+  double k = exp_p * (1 / (2 * v * sigma * pow(exp_q, exp_p_inv) * R::beta(exp_p_inv, exp_q)));
+  double sp = 1 / (exp_q * pow((v * sigma), exp_p) * pow((skew+1), exp_p));
+  double sm = 1 / (exp_q * pow((v * sigma), exp_p) * pow((-skew+1), exp_p));
+  double mm = exp_p_inv + exp_q;
+  double pt = -2/exp_p;
+  double fp = exp_p_inv * pow(sp, pt) * gammafun(-pt) * gammafun(mm + pt) * (1 / gammafun(mm));
+  double fm = exp_p_inv * pow(sm, pt) * gammafun(-pt) * gammafun(mm + pt) * (1 / gammafun(mm));
+  double ret = k * (fm + fp);
+
+  // Exact closed form solution does not exists (or is not known)
+  if(mean_cent) {
+    if((exp_p * exp_q) < 1) return -arma::datum::inf;
+    m = (2 * v * sigma * skew * pow(exp_q, exp_p_inv) * R::beta(-pt, (exp_q - exp_p_inv))) / R::beta(exp_p_inv, exp_q);
+    double cdd = p_sgt0(0, sigma, skew, p, q, false, var_adj) - p_sgt0(m, sigma, skew, p, q, false, var_adj);
+    double trap = trap_integral(m, 0, resolution, sigma, skew, p, q, false, var_adj);
+    ret = ret - skew * m + 2 * trap - 2 * m * cdd;
+  }
+
+  return ret;
+}
+
   //////////////////////////////////////
  // Multivariate normal distribution //
 //////////////////////////////////////

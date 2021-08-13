@@ -5,6 +5,14 @@ log_sgt0 <- function(x, sigma, skew, p, q, mean_cent, var_adj) {
     .Call(`_rbsvar_log_sgt0`, x, sigma, skew, p, q, mean_cent, var_adj)
 }
 
+p_sgt0 <- function(x, sigma, skew, p, q, mean_cent, var_adj) {
+    .Call(`_rbsvar_p_sgt0`, x, sigma, skew, p, q, mean_cent, var_adj)
+}
+
+abse_sgt0 <- function(sigma, skew, p, q, mean_cent, var_adj, resolution = 10L) {
+    .Call(`_rbsvar_abse_sgt0`, sigma, skew, p, q, mean_cent, var_adj, resolution)
+}
+
 dmvnrm_arma <- function(x, mean, sigma, logd = TRUE) {
     .Call(`_rbsvar_dmvnrm_arma`, x, mean, sigma, logd)
 }
