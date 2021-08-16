@@ -25,10 +25,6 @@ fill_xx <- function(xx, yy, m, t) {
     .Call(`_rbsvar_fill_xx`, xx, yy, m, t)
 }
 
-garch_out <- function(yy, fit, B, GARCH, t, m) {
-    .Call(`_rbsvar_garch_out`, yy, fit, B, GARCH, t, m)
-}
-
 log_like <- function(state, yy, xx, first_b, first_sgt, first_garch, first_regime, first_yna, m, A_rows, t, regimes, yna_indices, B_inverse, mean_cent, var_adj, parallel_likelihood) {
     .Call(`_rbsvar_log_like`, state, yy, xx, first_b, first_sgt, first_garch, first_regime, first_yna, m, A_rows, t, regimes, yna_indices, B_inverse, mean_cent, var_adj, parallel_likelihood)
 }

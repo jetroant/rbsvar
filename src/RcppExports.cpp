@@ -99,22 +99,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// garch_out
-Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH, int t, int m);
-RcppExport SEXP _rbsvar_garch_out(SEXP yySEXP, SEXP fitSEXP, SEXP BSEXP, SEXP GARCHSEXP, SEXP tSEXP, SEXP mSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< arma::mat >::type yy(yySEXP);
-    Rcpp::traits::input_parameter< arma::mat >::type fit(fitSEXP);
-    Rcpp::traits::input_parameter< arma::mat >::type B(BSEXP);
-    Rcpp::traits::input_parameter< arma::mat >::type GARCH(GARCHSEXP);
-    Rcpp::traits::input_parameter< int >::type t(tSEXP);
-    Rcpp::traits::input_parameter< int >::type m(mSEXP);
-    rcpp_result_gen = Rcpp::wrap(garch_out(yy, fit, B, GARCH, t, m));
-    return rcpp_result_gen;
-END_RCPP
-}
 // log_like
 double log_like(arma::vec state, arma::mat yy, arma::mat xx, const int first_b, const int first_sgt, const int first_garch, const int first_regime, const int first_yna, const int m, const int A_rows, const int t, const arma::ivec regimes, const arma::ivec yna_indices, const bool B_inverse, const bool mean_cent, const bool var_adj, const bool parallel_likelihood);
 RcppExport SEXP _rbsvar_log_like(SEXP stateSEXP, SEXP yySEXP, SEXP xxSEXP, SEXP first_bSEXP, SEXP first_sgtSEXP, SEXP first_garchSEXP, SEXP first_regimeSEXP, SEXP first_ynaSEXP, SEXP mSEXP, SEXP A_rowsSEXP, SEXP tSEXP, SEXP regimesSEXP, SEXP yna_indicesSEXP, SEXP B_inverseSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP, SEXP parallel_likelihoodSEXP) {
@@ -303,7 +287,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_dmvnrm_arma", (DL_FUNC) &_rbsvar_dmvnrm_arma, 4},
     {"_rbsvar_dmvnrm_arma_diagonal", (DL_FUNC) &_rbsvar_dmvnrm_arma_diagonal, 4},
     {"_rbsvar_fill_xx", (DL_FUNC) &_rbsvar_fill_xx, 4},
-    {"_rbsvar_garch_out", (DL_FUNC) &_rbsvar_garch_out, 6},
     {"_rbsvar_log_like", (DL_FUNC) &_rbsvar_log_like, 17},
     {"_rbsvar_check_permutation", (DL_FUNC) &_rbsvar_check_permutation, 1},
     {"_rbsvar_log_dirichlet", (DL_FUNC) &_rbsvar_log_dirichlet, 2},

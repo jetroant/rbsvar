@@ -10,7 +10,19 @@
  // SGT-distribution //
 //////////////////////
 
-// R::beta and R::lbeta might be risky...
+double gammafun(double x) {
+  arma::vec vec(1);
+  vec(0) = x;
+  arma::vec retvec = arma::tgamma(vec);
+  return retvec(0);
+}
+
+double betafun(double x, double y, bool l = false) {
+  double ret = (gammafun(x) * gammafun(y)) / gammafun(x + y);
+  if(l) ret = log(ret);
+  return ret;
+}
+
 // [[Rcpp::export]]
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
   double m = 0;
@@ -21,14 +33,14 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
     if((exp_p * exp_q) < 2) return -arma::datum::inf;
     v = pow(exp_q, -(1/exp_p)) * pow(
       (3 * pow(skew, 2) + 1)
-      * (R::beta((3/exp_p), (exp_q - (2/exp_p))) / R::beta((1/exp_p), exp_q))
+      * (betafun((3/exp_p), (exp_q - (2/exp_p))) / betafun((1/exp_p), exp_q))
       - 4 * pow(skew, 2)
-      * pow((R::beta((2/exp_p), (exp_q - (1/exp_p))) / R::beta((1/exp_p), exp_q)), 2),
+      * pow((betafun((2/exp_p), (exp_q - (1/exp_p))) / betafun((1/exp_p), exp_q)), 2),
       -(0.5));
   }
   if(mean_cent == true) {
     if((exp_p * exp_q) < 1) return -arma::datum::inf;
-    m = (2 * v * sigma * skew * pow(exp_q, (1/exp_p)) * R::beta((2/exp_p), (exp_q-(1/exp_p)))) / R::beta((1/exp_p), exp_q);
+    m = (2 * v * sigma * skew * pow(exp_q, (1/exp_p)) * betafun((2/exp_p), (exp_q-(1/exp_p)))) / betafun((1/exp_p), exp_q);
   }
   double sgn;
   if((x+m) < 0) sgn = -1.0;
@@ -38,7 +50,7 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
     - log(v)
     - log(sigma)
     - q/exp_p
-    - R::lbeta(1/exp_p, exp_q)
+    - betafun(1/exp_p, exp_q, true)
     - (1/exp_p + exp_q) * log(
         1 + pow(sgn*(x+m), exp_p) / (exp_q * pow((v * sigma), exp_p) * pow((skew*sgn + 1), exp_p))
     );
@@ -55,34 +67,26 @@ double p_sgt0(double x, double sigma, double skew, double p, double q, const boo
     if((exp_p * exp_q) < 2) return -arma::datum::inf;
     v = pow(exp_q, -(1/exp_p)) * pow(
       (3 * pow(skew, 2) + 1)
-      * (R::beta((3/exp_p), (exp_q - (2/exp_p))) / R::beta((1/exp_p), exp_q))
+      * (betafun((3/exp_p), (exp_q - (2/exp_p))) / betafun((1/exp_p), exp_q))
       - 4 * pow(skew, 2)
-      * pow((R::beta((2/exp_p), (exp_q - (1/exp_p))) / R::beta((1/exp_p), exp_q)), 2),
+      * pow((betafun((2/exp_p), (exp_q - (1/exp_p))) / betafun((1/exp_p), exp_q)), 2),
       -(0.5));
   }
   if(mean_cent == true) {
     if((exp_p * exp_q) < 1) return -arma::datum::inf;
-    m = (2 * v * sigma * skew * pow(exp_q, (1/exp_p)) * R::beta((2/exp_p), (exp_q-(1/exp_p)))) / R::beta((1/exp_p), exp_q);
+    m = (2 * v * sigma * skew * pow(exp_q, (1/exp_p)) * betafun((2/exp_p), (exp_q-(1/exp_p)))) / betafun((1/exp_p), exp_q);
     x = x + m;
   }
   bool flip = false;
   if(x > 0) flip = true;
   if(flip) skew = -skew;
   if(flip) x = -x;
-  Rcpp::NumericVector q_vec(1);
   double pt = (v * sigma * (1 - skew)/(-x));
-  q_vec(0) = 1 / (1 + exp_q * pow(pt, exp_p));
-  double pbeta_val = p4beta(q_vec, 1/exp_p, exp_q, 0, 1)(0);
+  double q_double = 1 / (1 + exp_q * pow(pt, exp_p));
+  double pbeta_val = p_4beta(q_double, 1/exp_p, exp_q, 0, 1);
   double ret = (1 - skew)/2 + (skew - 1)/2 * pbeta_val;
   if(flip) ret = 1 - ret;
   return ret;
-}
-
-double gammafun(double x) {
-  arma::vec vec(1);
-  vec(0) = x;
-  arma::vec retvec = arma::tgamma(vec);
-  return retvec(0);
 }
 
 double trap_integral(double lower, double upper, int resolution,
@@ -108,13 +112,13 @@ double abse_sgt0(double sigma, double skew, double p, double q, const bool mean_
     if((exp_p * exp_q) < 2) return -arma::datum::inf;
     v = pow(exp_q, -(1/exp_p)) * pow(
       (3 * pow(skew, 2) + 1)
-      * (R::beta((3/exp_p), (exp_q - (2/exp_p))) / R::beta((1/exp_p), exp_q))
+      * (betafun((3/exp_p), (exp_q - (2/exp_p))) / betafun((1/exp_p), exp_q))
       - 4 * pow(skew, 2)
-      * pow((R::beta((2/exp_p), (exp_q - (1/exp_p))) / R::beta((1/exp_p), exp_q)), 2),
+      * pow((betafun((2/exp_p), (exp_q - (1/exp_p))) / betafun((1/exp_p), exp_q)), 2),
       -(0.5));
   }
   double exp_p_inv = 1/exp_p;
-  double k = exp_p * (1 / (2 * v * sigma * pow(exp_q, exp_p_inv) * R::beta(exp_p_inv, exp_q)));
+  double k = exp_p * (1 / (2 * v * sigma * pow(exp_q, exp_p_inv) * betafun(exp_p_inv, exp_q)));
   double sp = 1 / (exp_q * pow((v * sigma), exp_p) * pow((skew+1), exp_p));
   double sm = 1 / (exp_q * pow((v * sigma), exp_p) * pow((-skew+1), exp_p));
   double mm = exp_p_inv + exp_q;
@@ -126,7 +130,7 @@ double abse_sgt0(double sigma, double skew, double p, double q, const bool mean_
   // Exact closed form solution does not exists (or is not known)
   if(mean_cent) {
     if((exp_p * exp_q) < 1) return -arma::datum::inf;
-    m = (2 * v * sigma * skew * pow(exp_q, exp_p_inv) * R::beta(-pt, (exp_q - exp_p_inv))) / R::beta(exp_p_inv, exp_q);
+    m = (2 * v * sigma * skew * pow(exp_q, exp_p_inv) * betafun(-pt, (exp_q - exp_p_inv))) / betafun(exp_p_inv, exp_q);
     double cdd = p_sgt0(0, sigma, skew, p, q, false, var_adj) - p_sgt0(m, sigma, skew, p, q, false, var_adj);
     double trap = trap_integral(m, 0, resolution, sigma, skew, p, q, false, var_adj);
     ret = ret - skew * m + 2 * trap - 2 * m * cdd;
@@ -247,6 +251,7 @@ arma::mat fill_xx(arma::mat xx, arma::mat yy, const int m, const int t) {
 }
 
 // NOT USED!
+/*
 // [[Rcpp::export]]
 Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
                      int t, int m) {
@@ -270,6 +275,7 @@ Rcpp::List garch_out(arma::mat yy, arma::mat fit, arma::mat B, arma::mat GARCH,
   out["V_diags"] = V_diags;
   return out;
 }
+*/
 
 // [[Rcpp::export]]
 double log_like(arma::vec state, arma::mat yy, arma::mat xx,
@@ -366,12 +372,25 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
     arma::vec r_last(m, arma::fill::ones);
     RV_diags.row(0) = v_last.t() % r_last.t(); //not necessary
 
+    // Rcpp::Rcout << "ok1" << std::endl;
+
+    // Expected absolute values for GARCH-LOM
+    arma::vec abse_vec(m);
+    if(first_garch != first_regime && var_adj == false) {
+      for(int j = 0; j != m; j++) {
+        abse_vec(j) = abse_sgt0(1, SGT(j,0), SGT(j,1), SGT(j,2), mean_cent, var_adj, 10);
+        // abse_vec(j) = 1;
+      }
+    }
+
+    // Rcpp::Rcout << "ok2" << std::endl;
+
     for(int i = 1; i != RVE.n_rows; i++) {
 
       // (garch == true)
       if(first_garch != first_regime) {
 
-        // Fix the unconditional expected value
+        // Use e^2 in LOM and fix the unconditional expected value to unity
         if(var_adj == true) {
           arma::vec last_dev = E.row(i-1).t() % E.row(i-1).t(); //^2
           for(int j = 0; j != m; j++) {
@@ -381,14 +400,14 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
           E.row(i) = RVE.row(i) / arma::sqrt(v_last).t(); //sqrt
         }
 
-        // Do NOT fix the unconditional expected value
+        // Use abs(e) in LOM and fix the unconditional expected value to unity
         if(var_adj == false) {
-          arma::vec last_dev = E.row(i-1).t() % E.row(i-1).t(); //^2
+          arma::vec last_dev = arma::abs(E.row(i-1).t()); //abs
           for(int j = 0; j != m; j++) {
-            v_last(j) = 1 + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
+            v_last(j) = (1 - GARCH(j,0) - GARCH(j,1) * abse_vec(j)) + GARCH(j,0) * v_last(j) + GARCH(j,1) * last_dev(j);
           }
-          RV_diags.row(i) = arma::sqrt(v_last).t(); //sqrt
-          E.row(i) = RVE.row(i) / arma::sqrt(v_last).t(); //sqrt
+          RV_diags.row(i) = v_last.t();
+          E.row(i) = RVE.row(i) / v_last.t();
         }
       }
 
