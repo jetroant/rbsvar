@@ -861,6 +861,10 @@ sign_probabilities <- function(model,
 
       # Bayes factor
       bayes_factor <- mean(prob_vec_total) / mean(prob_vec_total_prior)
+      if(is.nan(bayes_factor)) {
+        bayes_factor <- 0
+        warning("bayes_factor = 0/0, ignored.")
+      }
       if(bayes_factor > limit) {
         count <- count + 1
         significant_permutations[[count]] <- list("bayes_factor" = bayes_factor,
