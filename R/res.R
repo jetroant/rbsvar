@@ -816,6 +816,7 @@ sign_probabilities <- function(model,
                          " = ", nrow(shock_permutations) * nrow(sign_permutations)," permutations... \n"))
   significant_permutations <- list()
   count <- 0
+  if(verbose) pb <- txtProgressBar(min = 0, max = nrow(shock_permutations), style = 3)
   for(shock_perm_index in 1:nrow(shock_permutations)) {
     shock_perm_now <- shock_permutations[shock_perm_index,]
     for(sign_perm_index in 1:nrow(sign_permutations)) {
@@ -874,7 +875,9 @@ sign_probabilities <- function(model,
                                                   "prob_prior" = mean(prob_vec_total_prior))
       }
     }
+    if(verbose) setTxtProgressBar(pb, shock_perm_index)
   }
+  if(verbose) close(pb)
 
   if(verbose) cat("DONE. \n")
   if(verbose) cat("------ \n")
