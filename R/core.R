@@ -300,7 +300,7 @@ init_rbsvar <- function(y,
       ret
     }
     fit_sgt <- function(e, init_sgt) {
-      optim(init_sgt, neg_ll_sgt, method = "L-BFGS-B", e = e)
+      optim(init_sgt, neg_ll_sgt, method = "L-BFGS-B", e = e, upper = c(0.99, 2, 4))
     }
     E <- (xy$yy - xy$xx %*% matrix(ols_est, ncol = ncol(y))) %*% t(Binv_init)
     for(i in 1:ncol(E)) {
