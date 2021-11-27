@@ -58,6 +58,51 @@ double log_sgt0(double x, double sigma, double skew, double p, double q, const b
 }
 
 // [[Rcpp::export]]
+arma::vec log_sgt0_vec(arma::vec x, double sigma, double skew, double log_p, double log_q, const bool mean_cent, const bool var_adj) {
+  double m = 0;
+  double v = 1;
+  double p = exp(log_p);
+  double q = exp(log_q);
+  if(sigma <= 0) return log(arma::vec(x.size(), arma::fill::zeros));
+  if(var_adj == true) {
+    if((p * q) < 2) return log(arma::vec(x.size(), arma::fill::zeros));
+    v = pow(q, -(1/p)) * pow(
+      (3 * pow(skew, 2) + 1)
+      * (R::beta((3/p), (q - (2/p))) / betafun((1/p), q))
+      - 4 * pow(skew, 2)
+      * pow((R::beta((2/p), (q - (1/p))) / betafun((1/p), q)), 2),
+      -(0.5));
+  }
+  if(mean_cent == true) {
+    if((p * q) < 1) return log(arma::vec(x.size(), arma::fill::zeros));
+    m = (2 * v * sigma * skew * pow(p, (1/q)) * betafun((2/p), (q-(1/p)))) / betafun((1/p), q);
+  }
+  const double f1 = log(p)
+    - log(2)
+    - log(v)
+    - log(sigma)
+    - log_q/p
+    - log(betafun(1/p, q));
+    const double f2_base = q * pow((v * sigma), p);
+    const double f2_neg = (f2_base * pow((skew*(-1) + 1), p));
+    const double f2_pos = (f2_base * pow((skew + 1), p));
+    const double ipq = (1/p + q);
+    arma::vec xm = x + m;
+    arma::vec abs_xm = arma::abs(xm);
+    arma::vec ret(x.size());
+    for(int i = 0; i < ret.size(); i++) {
+      double log1p_arg;
+      if((xm(i)) < 0) {
+        log1p_arg = pow(abs_xm(i), p) / f2_neg;
+      } else{
+        log1p_arg = pow(abs_xm(i), p) / f2_pos;
+      }
+      ret(i) = f1 - ipq * std::log1p(log1p_arg);
+    }
+    return ret;
+}
+
+// [[Rcpp::export]]
 double p_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj) {
   double m = 0;
   double v = 1;
@@ -203,6 +248,30 @@ double dmvnrm_arma_diagonal(arma::vec const &x,
  // Likelihood function and friends //
 /////////////////////////////////////
 
+struct LikelihoodParallel_Old : public RcppParallel::Worker {
+
+  //Output
+  arma::mat& log_likes;
+
+  //Inputs
+  arma::mat& SGT;
+  const arma::mat& E;
+  const int t;
+  const bool mean_cent;
+  const bool var_adj;
+
+  LikelihoodParallel_Old(arma::mat& log_likes, arma::mat& SGT, const arma::mat& E, const int t, const bool mean_cent, const bool var_adj)
+    : log_likes(log_likes), SGT(SGT), E(E), t(t), mean_cent(mean_cent), var_adj(var_adj) {}
+
+  void operator()(std::size_t begin, std::size_t end) {
+    for(int ij = begin; ij != end; ++ij) {
+      arma::vec sgt_param = vectorise(SGT.row(ij / t));
+      log_likes(ij % t, ij / t) = log_sgt0(E(ij), 1.0, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
+    }
+  }
+
+};
+
 struct LikelihoodParallel : public RcppParallel::Worker {
 
   //Output
@@ -219,12 +288,11 @@ struct LikelihoodParallel : public RcppParallel::Worker {
     : log_likes(log_likes), SGT(SGT), E(E), t(t), mean_cent(mean_cent), var_adj(var_adj) {}
 
   void operator()(std::size_t begin, std::size_t end) {
-    for(int ij = begin; ij != end; ++ij) {
-      arma::vec sgt_param = vectorise(SGT.row(ij / t));
-      log_likes(ij % t, ij / t) = log_sgt0(E(ij), 1.0, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
+    for(int j = begin; j != end; ++j) {
+      arma::vec sgt_param = vectorise(SGT.row(j));
+      log_likes.col(j) = log_sgt0_vec(E.col(j), 1, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
     }
   }
-
 };
 
 // [[Rcpp::export]]
@@ -383,8 +451,6 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
       }
     }
 
-    // Rcpp::Rcout << "ok2" << std::endl;
-
     for(int i = 1; i != RVE.n_rows; i++) {
 
       // (garch == true)
@@ -432,16 +498,22 @@ double log_like(arma::vec state, arma::mat yy, arma::mat xx,
 
   //Sequential
   if(parallel_likelihood == false) {
-    for(int ij = 0; ij != log_likes.size(); ++ij) {
-      arma::vec sgt_param = vectorise(SGT.row(ij / t));
-      log_likes(ij % t, ij / t) = log_sgt0(E(ij), 1, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
+    for(int j = 0; j != log_likes.n_cols; j++) {
+      arma::vec sgt_param = vectorise(SGT.row(j));
+      log_likes.col(j) = log_sgt0_vec(E.col(j), 1, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
     }
   }
+  //if(parallel_likelihood == false) {
+  //  for(int ij = 0; ij != log_likes.size(); ++ij) {
+  //    arma::vec sgt_param = vectorise(SGT.row(ij / t));
+  //    log_likes(ij % t, ij / t) = log_sgt0(E(ij), 1, sgt_param(0), sgt_param(1), sgt_param(2), mean_cent, var_adj);
+  //  }
+  //}
 
   //Parallel
   if(parallel_likelihood == true) {
     LikelihoodParallel Wrkr(log_likes, SGT, E, t, mean_cent, var_adj);
-    parallelFor(0, log_likes.size(), Wrkr);
+    parallelFor(0, log_likes.n_cols, Wrkr);
   }
 
   //The log-likelihood to be returned

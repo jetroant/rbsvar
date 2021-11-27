@@ -23,6 +23,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// log_sgt0_vec
+arma::vec log_sgt0_vec(arma::vec x, double sigma, double skew, double log_p, double log_q, const bool mean_cent, const bool var_adj);
+RcppExport SEXP _rbsvar_log_sgt0_vec(SEXP xSEXP, SEXP sigmaSEXP, SEXP skewSEXP, SEXP log_pSEXP, SEXP log_qSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< arma::vec >::type x(xSEXP);
+    Rcpp::traits::input_parameter< double >::type sigma(sigmaSEXP);
+    Rcpp::traits::input_parameter< double >::type skew(skewSEXP);
+    Rcpp::traits::input_parameter< double >::type log_p(log_pSEXP);
+    Rcpp::traits::input_parameter< double >::type log_q(log_qSEXP);
+    Rcpp::traits::input_parameter< const bool >::type mean_cent(mean_centSEXP);
+    Rcpp::traits::input_parameter< const bool >::type var_adj(var_adjSEXP);
+    rcpp_result_gen = Rcpp::wrap(log_sgt0_vec(x, sigma, skew, log_p, log_q, mean_cent, var_adj));
+    return rcpp_result_gen;
+END_RCPP
+}
 // p_sgt0
 double p_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj);
 RcppExport SEXP _rbsvar_p_sgt0(SEXP xSEXP, SEXP sigmaSEXP, SEXP skewSEXP, SEXP pSEXP, SEXP qSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP) {
@@ -282,6 +299,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_rbsvar_log_sgt0", (DL_FUNC) &_rbsvar_log_sgt0, 7},
+    {"_rbsvar_log_sgt0_vec", (DL_FUNC) &_rbsvar_log_sgt0_vec, 7},
     {"_rbsvar_p_sgt0", (DL_FUNC) &_rbsvar_p_sgt0, 7},
     {"_rbsvar_abse_sgt0", (DL_FUNC) &_rbsvar_abse_sgt0, 7},
     {"_rbsvar_dmvnrm_arma", (DL_FUNC) &_rbsvar_dmvnrm_arma, 4},

@@ -5,6 +5,10 @@ log_sgt0 <- function(x, sigma, skew, p, q, mean_cent, var_adj) {
     .Call(`_rbsvar_log_sgt0`, x, sigma, skew, p, q, mean_cent, var_adj)
 }
 
+log_sgt0_vec <- function(x, sigma, skew, log_p, log_q, mean_cent, var_adj) {
+    .Call(`_rbsvar_log_sgt0_vec`, x, sigma, skew, log_p, log_q, mean_cent, var_adj)
+}
+
 p_sgt0 <- function(x, sigma, skew, p, q, mean_cent, var_adj) {
     .Call(`_rbsvar_p_sgt0`, x, sigma, skew, p, q, mean_cent, var_adj)
 }
