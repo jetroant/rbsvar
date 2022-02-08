@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // log_sgt0
 double log_sgt0(double x, double sigma, double skew, double p, double q, const bool mean_cent, const bool var_adj);
 RcppExport SEXP _rbsvar_log_sgt0(SEXP xSEXP, SEXP sigmaSEXP, SEXP skewSEXP, SEXP pSEXP, SEXP qSEXP, SEXP mean_centSEXP, SEXP var_adjSEXP) {

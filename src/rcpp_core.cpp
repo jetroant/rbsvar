@@ -75,7 +75,7 @@ arma::vec log_sgt0_vec(arma::vec x, double sigma, double skew, double log_p, dou
   }
   if(mean_cent == true) {
     if((p * q) < 1) return log(arma::vec(x.size(), arma::fill::zeros));
-    m = (2 * v * sigma * skew * pow(p, (1/q)) * betafun((2/p), (q-(1/p)))) / betafun((1/p), q);
+    m = (2 * v * sigma * skew * pow(q, (1/p)) * betafun((2/p), (q-(1/p)))) / betafun((1/p), q);
   }
   const double f1 = log(p)
     - log(2)
