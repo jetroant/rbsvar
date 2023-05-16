@@ -1,6 +1,13 @@
+**NOTE: This package is not actively developed, nor is it complete.**
+
+**For an actively developed (and more efficient) package for Bayesian estimation of non-Gaussian SVARs, see [bsvar](https://github.com/jetroant/bsvar).**
+
+**This package ([rbsvar](https://github.com/jetroant/rbsvar)) implements all the methods discussed in [Anttonen, Lanne and Luoto (2023)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3925575).**
+
+
 # rbsvar 
 
-Bayesian estimation of statistically identified robust structural vectorautoregressive models.
+Bayesian estimation of statistically identified "robust" structural vectorautoregressive models. 
 
 ## Getting Started
 
