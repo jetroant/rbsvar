@@ -10,17 +10,24 @@
  // SGT-distribution //
 //////////////////////
 
-double gammafun(double x) {
+double gammafun(double x, bool l = false) {
   arma::vec vec(1);
   vec(0) = x;
-  arma::vec retvec = arma::tgamma(vec);
+  arma::vec retvec;
+  if(l) {
+    retvec = arma::lgamma(vec);
+  } else {
+    retvec = arma::tgamma(vec);
+  }
   return retvec(0);
 }
 
 double betafun(double x, double y, bool l = false) {
-  double ret = (gammafun(x) * gammafun(y)) / gammafun(x + y);
-  if(l) ret = log(ret);
-  return ret;
+  if(l) {
+    return gammafun(x, true) + gammafun(y, true) - gammafun(x + y, true);
+  } else {
+    return (gammafun(x) * gammafun(y)) / gammafun(x + y);
+  }
 }
 
 // [[Rcpp::export]]
