@@ -2,7 +2,7 @@
 
 **For an actively developed (and more efficient) package for Bayesian estimation of non-Gaussian SVARs, see [bsvar](https://github.com/jetroant/bsvar).**
 
-**This package ([rbsvar](https://github.com/jetroant/rbsvar)) implements all the methods discussed in [Anttonen, Lanne and Luoto (2023)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3925575).**
+**This package ([rbsvar](https://github.com/jetroant/rbsvar)) implements all the methods discussed in [Anttonen, Lanne and Luoto (2023)](https://onlinelibrary.wiley.com/doi/full/10.1002/jae.3019).**
 
 
 # rbsvar 
